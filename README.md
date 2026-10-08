@@ -7,6 +7,11 @@ before replacing the installation, creates backups, and then creates a shortcut.
 [Download the Windows app](https://github.com/nuttyinc578/CPE-flashing-tool/releases/latest)
 · [Flashing guide](CPE_FLASHER_TOOL.md) · [NuttyMod Root guide](NUTTYMOD_ROOT.md)
 
+[Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
+
+v1.1.0 adds a refreshed desktop interface with scrollable setup panels, a live
+activity sidebar, clear install/recovery actions, and matching GitHub Pages.
+
 ## Included
 
 - Portable ZIP selection, game location/browse, and a Python compiler selector.
