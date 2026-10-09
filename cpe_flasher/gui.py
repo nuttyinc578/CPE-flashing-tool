@@ -77,7 +77,7 @@ class FlasherApp(tk.Tk):
         heading = ttk.Frame(header); heading.pack(side='left')
         ttk.Label(heading, text='CPE Flasher Tool', style='Title.TLabel').pack(anchor='w')
         ttk.Label(heading, text='Engine customization. A controlled rebuild. A way back.', style='Muted.TLabel').pack(anchor='w', pady=(2, 0))
-        ttk.Label(header, text='WINDOWS  /  v1.1.0', style='Muted.TLabel').pack(side='right')
+        ttk.Label(header, text='WINDOWS  /  v1.1.1', style='Muted.TLabel').pack(side='right')
         self.controls = []
         workspace = ttk.Frame(content); workspace.pack(fill='both', expand=True)
         workspace.columnconfigure(0, weight=3); workspace.columnconfigure(1, weight=1, minsize=270)

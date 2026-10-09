@@ -47,6 +47,11 @@ saved to `userdata/nuttymod/settings.json`. Bridge changes affect the next Play
 session. The base game settings remain accessible. Switching the compiled CPE
 backend or game source still requires another flash/rebuild.
 
+**Security ??? / OG menu** opens the existing security door, Broken Lands
+terminal, login, and OG-version menu. Escape returns through the original flow
+to Root Settings. Opening it does not unlock CPELoader or automatically download
+or restore a version; the original login and recovery confirmations remain.
+
 Root Mode adds music, click sounds, event frequency (6–120 seconds), and a VP
 loading-record toggle. The left corner displays `root mode v1`, `root mode lib
 v1.2`, and `nuttymod root v1`. VP loading records are stored locally in

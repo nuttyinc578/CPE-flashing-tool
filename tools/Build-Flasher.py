@@ -22,4 +22,6 @@ if stage.exists():
     shutil.rmtree(stage)
 safe_extract(args.game_source, stage)
 source_root(stage)
+# The release ZIP pins the base game; Root support evolves with this repository.
+shutil.copy2(root/'nuttymod_root_support.py', stage/'nuttymod_root_support.py')
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', 'cpe_flasher_build.spec'], cwd=root, check=True)

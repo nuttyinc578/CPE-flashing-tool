@@ -113,6 +113,14 @@ def attach_root_settings(app):
     app.nuttymod_root_enabled = True
 
 
+def open_security_menu(app):
+    """Enter the existing door/login/OG flow without changing loader policy."""
+    door = getattr(app, 'security_door', None)
+    if not callable(door): return 'Security / OG menu is unavailable in this game version.'
+    door()
+    return 'Returned from Security ??? / OG menu.'
+
+
 def root_settings_screen(app):
     import pygame
     app._nuttymod_root_menu_open = True
@@ -135,8 +143,10 @@ def _root_settings_screen(app):
                   ('music', 'MUSIC: '+('ON' if game['music'] else 'OFF')), ('sound', 'CLICK SOUNDS: '+('ON' if game['sound'] else 'OFF')),
                   ('interval', 'EVENT INTERVAL: '+str(game['event_interval'])+'s'),
                   ('verbose', 'VP LOADING RECORD: '+('ON' if value['root_mode']['verbose_loading'] else 'OFF')),
+                  ('security', 'SECURITY ??? / OG MENU'),
                   ('normal', 'BASE GAME SETTINGS'), ('back', 'SAVE / BACK')]
-        rectangles = [pygame.Rect(55+(i%2)*(WIDTH//2), 185+(i//2)*72, WIDTH//2-80, 56) for i in range(len(labels))]
+        rectangles = [pygame.Rect(55+(i%2)*(WIDTH//2), 185+(i//2)*64, WIDTH//2-80, 56) for i in range(len(labels))]
+        rectangles[-1] = pygame.Rect(55, 185+((len(labels)-1)//2)*64, WIDTH-110, 56)
         events = pygame.event.get()
         if not app.common_events(events): raise SystemExit
         for event in events:
@@ -167,6 +177,9 @@ def _root_settings_screen(app):
                     elif action in {'music', 'sound'}: game[action] = not game[action]
                     elif action == 'interval': game['event_interval'] = 6 if game['event_interval'] >= 120 else min(120, game['event_interval']+6)
                     elif action == 'verbose': value['root_mode']['verbose_loading'] = not value['root_mode']['verbose_loading']
+                    elif action == 'security':
+                        status = open_security_menu(app)
+                        break  # Discard clicks remaining from the previous scene.
                     elif action == 'normal':
                         app.nuttymod_root_original_settings()
                         game.update({key: app.settings[key] for key in ('theme', 'gravity', 'music', 'sound', 'event_interval')})
