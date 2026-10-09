@@ -9,14 +9,17 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
-v1.1.0 adds a refreshed desktop interface with scrollable setup panels, a live
-activity sidebar, clear install/recovery actions, and matching GitHub Pages.
+v1.2.0 adds the **NuttyMod Bypass** tab with an opt-in unlocked-update mod,
+trusted Python mod selection, Python installation/venv directory detection,
+and compiler dependency checks. Initial flashing still requires unlocking;
+integrity warnings and backups stay enabled.
 
 ## Included
 
 - Portable ZIP selection, game location/browse, and a Python compiler selector.
 - Required userdata; optional trusted Python loaders and startup scripts.
-- Full managed-source rewrite/recompile, CPELoader warnings, and installer-only updates.
+- Full managed-source rewrite/recompile, CPELoader warnings, and installer-only
+  updates by default; an explicit NuttyMod override permits unlocked in-game updates.
 - NuttyMod Root v1 with required Root Mode v1 / library v1.2, game/CPE settings,
   version overlay, and local VP loading logs.
 - **Undo changes** reverses the last flash in this session, or discards an
@@ -48,7 +51,7 @@ against that checksum file, then run:
 
 ```powershell
 python -m pip install -r requirements.txt
-python -m unittest test_flasher_restore -v
+python -m unittest test_flasher_restore test_update_override -v
 python tools/Build-Flasher.py --game-source Cube-Beta-Rebuild-Source-1.0.0.zip --sha256 <source-zip-sha256>
 python tools/Build-NuttyModRoot.py
 ```

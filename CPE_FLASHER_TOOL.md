@@ -100,4 +100,30 @@ physics feature: compatible API behavior remains the project author's job.
 Only use trusted source and projects: Python code can execute while compiling
 and playing. CPELoader is an application-level gate, not tamper-proof security.
 The flasher does not modify running processes, patch EXE bytes, install drivers,
-or bypass the loader lock. Backups remain available for manual recovery.
+or bypass the initial flashing lock. Backups remain available for manual recovery.
+
+## NuttyMod — Bypass (v1.2.0)
+
+The fourth tab offers the built-in **CPELoader unlock updates disabled bypass mod**.
+Select it before Flash ZIP + Recompile, then confirm the warning. This sets an
+explicit update-policy override in the managed `cpe-flash-profile.json`, compiles
+the updated CPELoader into the EXE and replaces matching source sidecars.
+It permits the existing in-game update/version/experience paths to run with a
+valid unlocked loader. It does not add an updater where one does not exist.
+Initial flashing still requires Ctrl+A → Y. Missing loader components and corrupt
+unlock state do not activate the override. Integrity warnings and update/install
+backups remain active. Updates may overwrite mods and remove this override;
+keep the original ZIP and backup. To disable it, reflash with the checkbox cleared
+or restore the prior backup. Other trusted `.py` loaders/scripts remain on tab 02.
+
+## Python directory discovery
+
+`flashing.patch` is a JSON discovery configuration (not a shell command or a
+unified-diff patch). The app loads it directly and bundles it in the Windows EXE.
+Select either `python.exe` or its installation/virtual-environment folder. Known
+layouts include `Scripts/python.exe` and `.venv/Scripts/python.exe`. **Detect and
+check Python** searches standalone installations and validates Python 3.11+
+(3.12 recommended), Pygame, Pymunk and PyInstaller. Missing packages show a
+compiler-specific installation instruction; the app does not install them silently.
+It never defaults to the Python running Codex. Game discovery does not use the
+current working directory; select the actual game folder if auto-detection fails.

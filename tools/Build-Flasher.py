@@ -12,6 +12,7 @@ from cpe_flasher.core import safe_extract, source_root
 parser = argparse.ArgumentParser()
 parser.add_argument('--game-source', type=Path, required=True)
 parser.add_argument('--sha256', required=True)
+parser.add_argument('--distpath', default='dist', help='Separate output folder if an existing app is open')
 args = parser.parse_args()
 with args.game_source.open('rb') as stream:
     actual = hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -24,4 +25,7 @@ safe_extract(args.game_source, stage)
 source_root(stage)
 # The release ZIP pins the base game; Root support evolves with this repository.
 shutil.copy2(root/'nuttymod_root_support.py', stage/'nuttymod_root_support.py')
-subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', 'cpe_flasher_build.spec'], cwd=root, check=True)
+shutil.copy2(root/'cpeloader.py', stage/'cpeloader.py')
+for name in ('cpeloader_ui.py', 'halloween_update.py'):
+    shutil.copy2(root/'game_overrides'/name, stage/name)
+subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--distpath', args.distpath, 'cpe_flasher_build.spec'], cwd=root, check=True)

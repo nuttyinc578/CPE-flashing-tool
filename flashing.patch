@@ -1,0 +1,5 @@
+{
+  "schema": 1,
+  "python_candidates": ["python.exe", "Scripts/python.exe", ".venv/Scripts/python.exe", "venv/Scripts/python.exe"],
+  "description": "Python discovery settings, not an executable patch. Select a Python installation or virtual-environment directory. Codex runtimes and the flasher executable are not game compilers."
+}

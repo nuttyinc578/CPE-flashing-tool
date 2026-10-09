@@ -16,6 +16,7 @@ from typing import Callable
 
 from cpeloader import CPELoader, COMPONENTS, MUTABLE, EXCLUDED_DIRS, write_json
 from .nuttyroot import NuttyRootInputs, stage_nuttyroot
+from .python_discovery import check_python
 
 EXE = 'The Cube Beta Halloween Update.exe'
 Log = Callable[[str], None]
@@ -33,6 +34,7 @@ class FlashOptions:
     safety_cube_alerts: bool = False
     full_rewrite: bool = True
     nuttymod_root: NuttyRootInputs | None = None
+    allow_unlocked_updates: bool = False
 
 
 def validate_options(options: FlashOptions | None) -> FlashOptions:
@@ -62,7 +64,9 @@ def apply_options(options: FlashOptions, build: Path, portable: Path) -> None:
         else: scripts.append(relative)
     profile = {'schema': 1, 'game_root': True, 'loader': loader, 'scripts': scripts,
                'verbose_python': options.verbose_python, 'safety_cube_alerts': options.safety_cube_alerts,
-               'cpeloader_warning': True, 'full_rewrite': options.full_rewrite}
+               'cpeloader_warning': True, 'full_rewrite': options.full_rewrite,
+               'allow_unlocked_updates': options.allow_unlocked_updates,
+               'nuttymod_mods': ['cpeloader-unlocked-updates'] if options.allow_unlocked_updates else []}
     for root in (build, portable): write_json(root/'cpe-flash-profile.json', profile)
 
 
@@ -193,7 +197,9 @@ def run_checked(command: list[str], cwd: Path, log: Log) -> None:
 
 
 def compile_game(build: Path, python: Path, log: Log) -> Path:
-    if not python.is_file(): raise FlasherError('Choose an installed Python 3.12 interpreter (or a game virtual environment).')
+    try: python = check_python(python, cwd=build)
+    except ValueError as exc: raise FlasherError(str(exc)) from exc
+    log('Game compiler: '+str(python))
     run_checked([str(python), '-c', "import sys,pygame,pymunk,PyInstaller; assert sys.version_info >= (3,11), 'Python 3.11+ required'"], build, log)
     run_checked([str(python), '-c', "from cpe.backend import CubePhysicsEngine, physics_backend; e=CubePhysicsEngine(); e.execute_line('CPE/1 1 2 200 100 20 1 255 90 30'); e.step(1/60); assert e.snapshot()['engine']=='CPE'; assert hasattr(e,'register_body') and hasattr(physics_backend,'Body')"], build, log)
     run_checked([str(python), '-m', 'PyInstaller', '--noconfirm', '--clean', 'summer_build.spec'], build, log)
@@ -249,6 +255,12 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
         safe_extract(portable/'game-source.zip', build)
         source_root(build)
     else: raise FlasherError('Older portable ZIP: select matching game source for recompilation.')
+    # Update our owned loader policy inside both the compiled game and sidecars.
+    runtime_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
+    shutil.copy2(runtime_root/'cpeloader.py', build/'cpeloader.py')
+    for name in ('cpeloader_ui.py', 'halloween_update.py'):
+        if (runtime_root/'game_overrides'/name).is_file():
+            shutil.copy2(runtime_root/'game_overrides'/name, build/name)
     label = apply_project(project, build, portable)
     apply_options(options, build, portable)
     if options.nuttymod_root:
@@ -429,5 +441,6 @@ def locate_games() -> list[Path]:
     candidates = []
     local = os.environ.get('LOCALAPPDATA')
     if local: candidates.append(Path(local)/'Programs'/'The Cube Beta Halloween Update')
-    candidates.extend([Path.cwd(), Path(sys.executable).resolve().parent])
-    return list(dict.fromkeys(path.resolve() for path in candidates if (path/EXE).is_file()))
+    if getattr(sys, 'frozen', False): candidates.append(Path(sys.executable).resolve().parent)
+    return list(dict.fromkeys(path.resolve() for path in candidates
+                             if (path/EXE).is_file() and all((path/name).is_file() for name in COMPONENTS)))

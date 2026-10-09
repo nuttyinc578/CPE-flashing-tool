@@ -1,4 +1,4 @@
-"""Package interface v1.1.1 without changing the pinned game-source release."""
+"""Package the flasher without changing the pinned game-source release."""
 import hashlib
 import shutil
 import argparse
@@ -7,9 +7,12 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
 parser.add_argument('--app', type=Path, default=root/'dist'/'CPE Flasher Tool.exe')
+parser.add_argument('--version', default='1.2.0')
 args=parser.parse_args()
+if not args.version or any(c not in '0123456789.' for c in args.version):
+    raise SystemExit('Use a numeric dotted release version.')
 output=root/'release-download'; output.mkdir(exist_ok=True)
-app=output/'CPE-Flasher-Tool-1.1.1-Windows.exe'
+app=output/f'CPE-Flasher-Tool-{args.version}-Windows.exe'
 shutil.copy2(args.app, app)
 files=[app, output/'NuttyMod-Root-1.0.0-Packages.zip', output/'Cube-Beta-Rebuild-Source-1.0.0.zip']
 lines=[]

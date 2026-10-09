@@ -19,7 +19,7 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install -r requirements.txt
       - name: Test backup recovery
-        run: python -m unittest test_flasher_restore -v
+        run: python -m unittest test_flasher_restore test_update_override -v
       - name: Download pinned integrated game rebuild source
         shell: pwsh
         run: |
@@ -35,7 +35,7 @@ jobs:
           $app = Start-Process -FilePath '.\dist\CPE Flasher Tool.exe' -ArgumentList @('--self-test', ('"' + $report + '"')) -WindowStyle Hidden -PassThru -Wait
           if ($app.ExitCode -ne 0) { throw 'Compiled GUI failed' }
           $result = Get-Content -LiteralPath $report | ConvertFrom-Json
-          if (-not $result.gui_initialized -or -not $result.rebuild_source_present -or $result.controls -lt 36) { throw 'Incomplete flasher GUI/source' }
+          if (-not $result.gui_initialized -or -not $result.rebuild_source_present -or $result.controls -lt 39 -or $result.tabs -ne 4 -or $result.update_override_default -or -not $result.python_discovery_patch) { throw 'Incomplete flasher GUI/source' }
       - uses: actions/upload-artifact@v4
         with:
           name: CPE-Flasher-Tool-Windows
@@ -45,5 +45,6 @@ jobs:
             release-download/NuttyMod-Root-1.0.0-Packages.zip
             CPE_FLASHER_TOOL.md
             NUTTYMOD_ROOT.md
+            flashing.patch
             LICENSE
             THIRD_PARTY_NOTICES.txt

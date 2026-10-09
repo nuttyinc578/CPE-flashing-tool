@@ -11,6 +11,9 @@ if __name__ == '__main__':
         app.withdraw()
         app.update_idletasks()
         source_root(Path(app.source.get()))
-        Path(sys.argv[2]).write_text(json.dumps({'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls)}), encoding='utf-8')
+        Path(sys.argv[2]).write_text(json.dumps({'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls),
+                                               'tabs': len(app.notebook.tabs()), 'update_override_default': app.allow_unlocked_updates.get(),
+                                               'python_discovery_patch': (Path(getattr(sys, '_MEIPASS', '.'))/'flashing.patch').is_file(),
+                                               'detected_python': app.python.get()}), encoding='utf-8')
         app.destroy()
     else: main()

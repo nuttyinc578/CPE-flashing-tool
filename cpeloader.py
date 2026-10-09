@@ -81,8 +81,20 @@ class CPELoader:
         if not self.unlocked:
             raise PermissionError('CPELoader is locked. Open the game, press Ctrl+A, then Y to unlock all three loader components before flashing.')
 
+    @property
+    def unlocked_updates_enabled(self) -> bool:
+        if not self.unlocked: return False
+        try:
+            profile = json.loads((self.root/'cpe-flash-profile.json').read_text(encoding='utf-8'))
+            return (isinstance(profile, dict) and profile.get('schema') == 1
+                    and profile.get('allow_unlocked_updates') is True
+                    and isinstance(profile.get('nuttymod_mods'), list)
+                    and 'cpeloader-unlocked-updates' in profile.get('nuttymod_mods', []))
+        except (ValueError, OSError, TypeError): return False
+
     def require_in_game_update(self) -> None:
-        if self.state().get('unlocked') is True or self.state().get('state_error'):
+        state = self.state()
+        if state.get('state_error') or (state.get('unlocked') is True and not self.unlocked_updates_enabled):
             raise PermissionError('CPELoader is unlocked. Game updates are disabled; use the external installer.')
 
 

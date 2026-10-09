@@ -12,6 +12,7 @@ from tkinter import ttk, filedialog, messagebox
 from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions
 from cpeloader import write_json
 from .nuttyroot import NuttyRootInputs
+from .python_discovery import discover_python, check_python
 
 
 class FlasherApp(tk.Tk):
@@ -50,8 +51,8 @@ class FlasherApp(tk.Tk):
         self.target = tk.StringVar()
         self.project = tk.StringVar()
         self.source = tk.StringVar(value=str(root) if (root/'cube_core.py').exists() else '')
-        local_python = root/'.venv'/'Scripts'/'python.exe'
-        self.python = tk.StringVar(value=str(local_python) if local_python.is_file() else ('' if getattr(sys, 'frozen', False) else sys.executable))
+        interpreters = discover_python((root, root.parent/'THE-CUBE-GITHUB'))
+        self.python = tk.StringVar(value=str(interpreters[0]) if interpreters else '')
         self.trust = tk.BooleanVar(value=False)
         self.userdata = tk.StringVar()
         self.loader = tk.StringVar()
@@ -61,6 +62,7 @@ class FlasherApp(tk.Tk):
         self.safety_alerts = tk.BooleanVar(value=False)
         self.full_rewrite = tk.BooleanVar(value=True)
         self.nuttyroot = tk.BooleanVar(value=False)
+        self.allow_unlocked_updates = tk.BooleanVar(value=False)
         self.nutty_zip = tk.StringVar()
         self.nutty_cp = tk.StringVar()
         self.rootmode_tar = tk.StringVar()
@@ -77,16 +79,25 @@ class FlasherApp(tk.Tk):
         heading = ttk.Frame(header); heading.pack(side='left')
         ttk.Label(heading, text='CPE Flasher Tool', style='Title.TLabel').pack(anchor='w')
         ttk.Label(heading, text='Engine customization. A controlled rebuild. A way back.', style='Muted.TLabel').pack(anchor='w', pady=(2, 0))
-        ttk.Label(header, text='WINDOWS  /  v1.1.1', style='Muted.TLabel').pack(side='right')
+        ttk.Label(header, text='WINDOWS  /  v1.2.0', style='Muted.TLabel').pack(side='right')
         self.controls = []
         workspace = ttk.Frame(content); workspace.pack(fill='both', expand=True)
         workspace.columnconfigure(0, weight=3); workspace.columnconfigure(1, weight=1, minsize=270)
         workspace.rowconfigure(0, weight=1)
         notebook = ttk.Notebook(workspace); notebook.grid(row=0, column=0, sticky='nsew', padx=(0, 20))
         self.notebook = notebook
-        inputs = self.scroll_page(notebook, '01  Game & compiler')
-        options = self.scroll_page(notebook, '02  Userdata & loaders')
-        nutty = self.scroll_page(notebook, '03  NuttyMod Root')
+        inputs = self.scroll_page(notebook, '01 Game & compiler')
+        options = self.scroll_page(notebook, '02 Userdata & loaders')
+        nutty = self.scroll_page(notebook, '03 NuttyMod Root')
+        bypass = self.scroll_page(notebook, '04 NuttyMod Bypass')
+        ttk.Label(bypass, text='CPELoader unlock updates disabled bypass mod', style='Section.TLabel', wraplength=540).pack(anchor='w', pady=8)
+        override = ttk.Checkbutton(bypass, text='Flash mod: allow in-game updates with CPELoader unlocked', variable=self.allow_unlocked_updates)
+        override.pack(anchor='w', pady=8); self.controls.append(override)
+        ttk.Label(bypass, text='Optional, off by default. This changes only the game update policy. Initial flashing still requires Ctrl+A → Y. File modification warnings and install backups stay enabled. Updates may replace your mods; keep your original ZIP and backups.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
+        ttk.Label(bypass, text='Other trusted NuttyMod .py loaders and startup scripts can be selected on tab 02. This tab does not make incompatible mods compatible.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
+        mods = ttk.Button(bypass, text='Choose trusted NuttyMod mods (.py)…', command=self.pick_scripts)
+        mods.pack(anchor='w', pady=8); self.controls.append(mods)
+        ttk.Label(bypass, textvariable=self.script_status, wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         activity = ttk.Frame(workspace, padding=(16, 12)); activity.grid(row=0, column=1, sticky='nsew')
         ttk.Label(activity, text='ACTIVITY', style='Section.TLabel').pack(anchor='w')
         ttk.Label(activity, text='Build output and recovery history', style='Muted.TLabel').pack(anchor='w', pady=(4, 12))
@@ -109,6 +120,9 @@ class FlasherApp(tk.Tk):
         self.row(inputs, '3. CPE project folder (leave blank for bundled Rephysics)', self.project, lambda: self.pick_folder(self.project))
         self.row(inputs, '4. Complete game source (blank: use source inside portable ZIP)', self.source, lambda: self.pick_folder(self.source))
         self.row(inputs, '5. Python 3.12 with Pygame, Pymunk and PyInstaller installed', self.python, self.pick_python)
+        for text, action in (('Choose Python installation / venv folder…', self.pick_python_folder), ('Detect and check Python', self.detect_python)):
+            button = ttk.Button(inputs, text=text, command=action)
+            button.pack(anchor='w', pady=(0, 6)); self.controls.append(button)
         self.row(options, '6. Required userdata folder (game-level root configuration)', self.userdata, lambda: self.pick_folder(self.userdata))
         create = ttk.Button(options, text='Create userdata folder…', command=self.create_userdata)
         create.pack(anchor='w', pady=(0, 8)); self.controls.append(create)
@@ -146,7 +160,7 @@ class FlasherApp(tk.Tk):
         self.locate(silent=True)
         for variable in (self.archive, self.target, self.project, self.source, self.python,
                          self.userdata, self.loader, self.verbose, self.safety_alerts, self.full_rewrite,
-                         self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar):
+                         self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates):
             variable.trace_add('write', self.invalidate_plan)
         if show_warning: self.after_idle(self.startup_warning)
 
@@ -228,6 +242,21 @@ class FlasherApp(tk.Tk):
         selected = filedialog.askopenfilename(title='Select python.exe', filetypes=[('Python executable', '*.exe')])
         if selected: self.python.set(selected)
 
+    def pick_python_folder(self):
+        selected = filedialog.askdirectory(title='Choose Python installation or virtual environment folder')
+        if selected: self.python.set(selected)
+
+    def detect_python(self):
+        preferred = tuple(Path(value.get()) for value in (self.python, self.source, self.target) if value.get().strip())
+        def detect():
+            errors = []
+            for candidate in discover_python(preferred):
+                try: return ('python', check_python(candidate))
+                except ValueError as exc: errors.append(str(exc))
+            raise ValueError(errors[0] if errors else 'No standalone Python found. Install Python 3.12 and choose its folder; Codex Python is excluded.')
+        self.status.set('Checking installed Python compilers…')
+        self.start(detect)
+
     def pick_file(self, variable, pattern):
         selected = filedialog.askopenfilename(filetypes=[('Package file', pattern)])
         if selected: variable.set(selected)
@@ -255,11 +284,13 @@ class FlasherApp(tk.Tk):
         if not all(value.get().strip() for value in (self.archive, self.target, self.python, self.userdata)):
             messagebox.showwarning('Missing input', 'Select a portable ZIP, target game folder, Python interpreter and required userdata folder.'); return
         if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source and project. Continue only if you trust those files?'): return
+        if self.allow_unlocked_updates.get() and not messagebox.askyesno('Enable unlocked game updates?', 'This mod lets the existing in-game updater run while CPELoader is unlocked. Updating may overwrite mods or break compatibility. Integrity warnings remain on. Keep backups. Enable this override?'): return
         archive, target, python = (Path(value.get()) for value in (self.archive, self.target, self.python))
         source = Path(self.source.get()) if self.source.get().strip() else None
         project = Path(self.project.get()) if self.project.get().strip() else None
         options = FlashOptions(Path(self.userdata.get()), Path(self.loader.get()) if self.loader.get().strip() else None,
                                self.scripts, self.verbose.get(), self.safety_alerts.get(), self.full_rewrite.get())
+        options.allow_unlocked_updates = self.allow_unlocked_updates.get()
         if self.nuttyroot.get():
             if not all(v.get().strip() for v in (self.loader, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar)):
                 messagebox.showwarning('NuttyMod Root', 'Select the loader .py, folder ZIP, all three TAR files, and official SHA256SUMS.txt. Root Mode requires Full rewrite.'); return
@@ -319,6 +350,10 @@ class FlasherApp(tk.Tk):
                         self.plan = None
                         self.status.set(f'Backup restored. Pre-restore recovery snapshot: {value[1]}')
                         messagebox.showinfo('Restore complete', self.status.get())
+                    elif value[0] == 'python':
+                        self.python.set(str(value[1]))
+                        self.status.set('Python compiler verified: '+str(value[1]))
+                        self.log(self.status.get())
                     else:
                         self.last_backup = value[1]
                         self.plan = None
