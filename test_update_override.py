@@ -72,8 +72,8 @@ class PythonDiscoveryTests(unittest.TestCase):
         (direct/'python.exe').write_text('test fixture')
         venv = self.root/'venv'; (venv/'Scripts').mkdir(parents=True)
         (venv/'Scripts'/'python.exe').write_text('test fixture')
-        self.assertEqual(resolve_python(direct), direct/'python.exe')
-        self.assertEqual(resolve_python(venv), venv/'Scripts'/'python.exe')
+        self.assertEqual(resolve_python(direct), (direct/'python.exe').resolve())
+        self.assertEqual(resolve_python(venv), (venv/'Scripts'/'python.exe').resolve())
 
     def test_codex_runtime_and_flashing_executable_are_not_compilers(self):
         codex = self.root/'codex-runtimes'; codex.mkdir()
