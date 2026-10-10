@@ -63,6 +63,7 @@ class FlasherApp(tk.Tk):
         self.full_rewrite = tk.BooleanVar(value=True)
         self.nuttyroot = tk.BooleanVar(value=False)
         self.allow_unlocked_updates = tk.BooleanVar(value=False)
+        self.custom_cube_tar = tk.StringVar()
         self.nutty_zip = tk.StringVar()
         self.nutty_cp = tk.StringVar()
         self.rootmode_tar = tk.StringVar()
@@ -79,17 +80,27 @@ class FlasherApp(tk.Tk):
         heading = ttk.Frame(header); heading.pack(side='left')
         ttk.Label(heading, text='CPE Flasher Tool', style='Title.TLabel').pack(anchor='w')
         ttk.Label(heading, text='Engine customization. A controlled rebuild. A way back.', style='Muted.TLabel').pack(anchor='w', pady=(2, 0))
-        ttk.Label(header, text='WINDOWS  /  v1.2.0', style='Muted.TLabel').pack(side='right')
+        ttk.Label(header, text='WINDOWS  /  v1.2.1', style='Muted.TLabel').pack(side='right')
         self.controls = []
         workspace = ttk.Frame(content); workspace.pack(fill='both', expand=True)
         workspace.columnconfigure(0, weight=3); workspace.columnconfigure(1, weight=1, minsize=270)
         workspace.rowconfigure(0, weight=1)
         notebook = ttk.Notebook(workspace); notebook.grid(row=0, column=0, sticky='nsew', padx=(0, 20))
         self.notebook = notebook
-        inputs = self.scroll_page(notebook, '01 Game & compiler')
-        options = self.scroll_page(notebook, '02 Userdata & loaders')
-        nutty = self.scroll_page(notebook, '03 NuttyMod Root')
-        bypass = self.scroll_page(notebook, '04 NuttyMod Bypass')
+        inputs = self.scroll_page(notebook, '01 Game')
+        options = self.scroll_page(notebook, '02 Userdata')
+        nutty = self.scroll_page(notebook, '03 Root')
+        bypass = self.scroll_page(notebook, '04 Bypass')
+        custom = self.scroll_page(notebook, '05 Custom Cube')
+        ttk.Label(custom, text='CUSTOM CUBE BETA', style='Section.TLabel').pack(anchor='w', pady=8)
+        self.row(custom, 'Trusted Python game overlay (.tar), optional', self.custom_cube_tar, lambda: self.pick_file(self.custom_cube_tar, '*.tar'))
+        ttk.Label(custom, text='Rebuild a modified game from a Custom Cube TAR. Requires userdata, Full rewrite, an original portable ZIP and an unlocked loader. Python code is executable: only use packages you trust. Backups and warnings remain on.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
+        for title, callback in (('Use bundled Custom Ortain TAR', lambda: self.custom_cube_tar.set(str(root/'Custom-Cube-Beta-Ortain.tar'))),
+                                ('Use CPE Series 2 — Ortain project', lambda: self.project.set(str(root/'projects'/'cpe-series-2-ortain'))),
+                                ('Clear custom game package', lambda: self.custom_cube_tar.set(''))):
+            button = ttk.Button(custom, text=title, command=callback)
+            button.pack(anchor='w', pady=6); self.controls.append(button)
+        ttk.Label(custom, text='Ortain includes bounded neon motion trails, the pulse(x, y) engine API, and a custom cyan/purple loading scene after mandatory loader warnings. It extends CPE Rephysics rather than replacing its solver.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(bypass, text='CPELoader unlock updates disabled bypass mod', style='Section.TLabel', wraplength=540).pack(anchor='w', pady=8)
         override = ttk.Checkbutton(bypass, text='Flash mod: allow in-game updates with CPELoader unlocked', variable=self.allow_unlocked_updates)
         override.pack(anchor='w', pady=8); self.controls.append(override)
@@ -160,7 +171,7 @@ class FlasherApp(tk.Tk):
         self.locate(silent=True)
         for variable in (self.archive, self.target, self.project, self.source, self.python,
                          self.userdata, self.loader, self.verbose, self.safety_alerts, self.full_rewrite,
-                         self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates):
+                         self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates, self.custom_cube_tar):
             variable.trace_add('write', self.invalidate_plan)
         if show_warning: self.after_idle(self.startup_warning)
 
@@ -291,6 +302,7 @@ class FlasherApp(tk.Tk):
         options = FlashOptions(Path(self.userdata.get()), Path(self.loader.get()) if self.loader.get().strip() else None,
                                self.scripts, self.verbose.get(), self.safety_alerts.get(), self.full_rewrite.get())
         options.allow_unlocked_updates = self.allow_unlocked_updates.get()
+        options.custom_cube_tar = Path(self.custom_cube_tar.get()) if self.custom_cube_tar.get().strip() else None
         if self.nuttyroot.get():
             if not all(v.get().strip() for v in (self.loader, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar)):
                 messagebox.showwarning('NuttyMod Root', 'Select the loader .py, folder ZIP, all three TAR files, and official SHA256SUMS.txt. Root Mode requires Full rewrite.'); return

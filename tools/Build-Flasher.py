@@ -26,6 +26,7 @@ source_root(stage)
 # The release ZIP pins the base game; Root support evolves with this repository.
 shutil.copy2(root/'nuttymod_root_support.py', stage/'nuttymod_root_support.py')
 shutil.copy2(root/'cpeloader.py', stage/'cpeloader.py')
-for name in ('cpeloader_ui.py', 'halloween_update.py'):
+for name in ('cpeloader_ui.py', 'halloween_update.py', 'custom_cube_loading.py'):
     shutil.copy2(root/'game_overrides'/name, stage/name)
+subprocess.run([sys.executable, str(root/'tools'/'Build-CustomCube.py')], cwd=root, check=True)
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--distpath', args.distpath, 'cpe_flasher_build.spec'], cwd=root, check=True)

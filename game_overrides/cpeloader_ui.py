@@ -132,5 +132,12 @@ def install_cpeloader_ui(game_app):
                 if not unlock_screen(app): return False
         return common(app, incoming)
     def startup(app):
-        return loader_loading(app) and loading(app)
+        if not loader_loading(app): return False
+        import json
+        profile_path = app_path()/'cpe-flash-profile.json'
+        profile = json.loads(profile_path.read_text(encoding='utf-8')) if profile_path.exists() else {}
+        if profile.get('loading_preset') == 'ortain':
+            from custom_cube_loading import ortain_loading
+            return ortain_loading(app)
+        return loading(app)
     game_app.__init__, game_app.common_events, game_app.fall_update_screen = initialize, events, startup

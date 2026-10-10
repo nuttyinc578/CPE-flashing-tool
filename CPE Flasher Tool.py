@@ -14,6 +14,8 @@ if __name__ == '__main__':
         Path(sys.argv[2]).write_text(json.dumps({'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls),
                                                'tabs': len(app.notebook.tabs()), 'update_override_default': app.allow_unlocked_updates.get(),
                                                'python_discovery_patch': (Path(getattr(sys, '_MEIPASS', '.'))/'flashing.patch').is_file(),
-                                               'detected_python': app.python.get()}), encoding='utf-8')
+                                               'detected_python': app.python.get(),
+                                               'custom_cube_bundle': (Path(getattr(sys, '_MEIPASS', '.'))/'Custom-Cube-Beta-Ortain.tar').is_file()
+                                               and (Path(getattr(sys, '_MEIPASS', '.'))/'projects'/'cpe-series-2-ortain'/'cpe-project.json').is_file()}), encoding='utf-8')
         app.destroy()
     else: main()

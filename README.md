@@ -9,7 +9,9 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
-v1.2.0 adds the **NuttyMod Bypass** tab with an opt-in unlocked-update mod,
+v1.2.1 adds **Custom Cube Beta** Python TAR packages, the bundled **CPE Series 2 — Ortain**
+project and its custom loading screen. See [Custom Cube guide](CUSTOM_CUBE.md)
+and [changelog](CHANGELOG.md). v1.2.0 adds the **NuttyMod Bypass** tab with an opt-in unlocked-update mod,
 trusted Python mod selection, Python installation/venv directory detection,
 and compiler dependency checks. Initial flashing still requires unlocking;
 integrity warnings and backups stay enabled.

@@ -35,6 +35,7 @@ class FlashOptions:
     full_rewrite: bool = True
     nuttymod_root: NuttyRootInputs | None = None
     allow_unlocked_updates: bool = False
+    custom_cube_tar: Path | None = None
 
 
 def validate_options(options: FlashOptions | None) -> FlashOptions:
@@ -46,6 +47,10 @@ def validate_options(options: FlashOptions | None) -> FlashOptions:
     for path in (*options.scripts, *((options.loader,) if options.loader else ())):
         if not path.is_file() or path.is_symlink() or path.suffix.lower() != '.py':
             raise FlasherError('Optional loaders and startup scripts must be trusted .py files.')
+    if options.custom_cube_tar:
+        if not options.full_rewrite: raise FlasherError('Custom Cube Beta requires Full rewrite.')
+        if not options.custom_cube_tar.is_file() or options.custom_cube_tar.suffix.lower() != '.tar':
+            raise FlasherError('Choose a Custom Cube Beta .tar package.')
     return options
 
 
@@ -67,6 +72,8 @@ def apply_options(options: FlashOptions, build: Path, portable: Path) -> None:
                'cpeloader_warning': True, 'full_rewrite': options.full_rewrite,
                'allow_unlocked_updates': options.allow_unlocked_updates,
                'nuttymod_mods': ['cpeloader-unlocked-updates'] if options.allow_unlocked_updates else []}
+    backend = json.loads((build/'cpe-backend.json').read_text(encoding='utf-8')) if (build/'cpe-backend.json').exists() else {}
+    profile['loading_preset'] = 'ortain' if backend.get('loading_preset') == 'ortain' else 'halloween'
     for root in (build, portable): write_json(root/'cpe-flash-profile.json', profile)
 
 
@@ -180,7 +187,8 @@ def apply_project(project: Path | None, build: Path, portable: Path) -> str:
             raise FlasherError('Project needs cpe_project/__init__.py and physics.py with the CPE-compatible APIs.')
         copy_tree(package, build/'cpe_project')
         copy_tree(package, portable/'cpe_project')
-        configuration = {'backend': 'project', 'version': str(manifest.get('version', 'experimental')), 'flashed_by': 'CPE Flasher Tool'}
+        configuration = {'backend': 'project', 'version': str(manifest.get('version', 'experimental')), 'flashed_by': 'CPE Flasher Tool',
+                         'loading_preset': manifest.get('loading_preset', 'halloween')}
         label = str(manifest.get('name', 'Custom CPE project'))
     for root in (build, portable): write_json(root/'cpe-backend.json', configuration)
     return label
@@ -258,11 +266,14 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
     # Update our owned loader policy inside both the compiled game and sidecars.
     runtime_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
     shutil.copy2(runtime_root/'cpeloader.py', build/'cpeloader.py')
-    for name in ('cpeloader_ui.py', 'halloween_update.py'):
+    for name in ('cpeloader_ui.py', 'halloween_update.py', 'custom_cube_loading.py'):
         if (runtime_root/'game_overrides'/name).is_file():
             shutil.copy2(runtime_root/'game_overrides'/name, build/name)
     label = apply_project(project, build, portable)
     apply_options(options, build, portable)
+    if options.custom_cube_tar:
+        from .custom_cube import stage_custom_cube
+        label += ' + ' + stage_custom_cube(options.custom_cube_tar, build, portable, workspace)
     if options.nuttymod_root:
         label += ' + ' + stage_nuttyroot(options.nuttymod_root, options.loader, archive, build, portable, workspace)
     log(f'Rebuilding the whole game for {label}. Target files remain untouched…')
