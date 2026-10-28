@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -36,10 +37,63 @@ class FlashOptions:
     nuttymod_root: NuttyRootInputs | None = None
     allow_unlocked_updates: bool = False
     custom_cube_tar: Path | None = None
+    custom_portable: bool = False
+    custom_portable_sha256: str = ''
+    custom_executable_name: str = ''
+    target_executable_name: str = ''
+
+
+CUSTOM_PORTABLE_WARNING = (
+    'WARNING: Unofficial builds are a great SECURITY RISK. This includes '
+    'NuttyMod runtime portable ZIPs. They can run malicious code, damage your '
+    'game, or access your files. A matching SHA-256 does not prove a build is safe '
+    'or official. Unofficial builds cannot use official in-game updates; updates '
+    'are provided by the owner of the custom ZIP. Keep a trusted original and backups.'
+)
+
+
+def verify_custom_portable(archive: Path, expected: str) -> str:
+    expected = expected.strip().lower()
+    if not re.fullmatch(r'[0-9a-f]{64}', expected):
+        raise FlasherError('Custom portable ZIP requires a 64-character SHA-256 from its owner.')
+    with archive.open('rb') as stream:
+        actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if actual != expected:
+        raise FlasherError('Custom portable ZIP SHA-256 mismatch. Nothing has been installed.')
+    return actual
+
+
+def executable_name(name: str) -> str:
+    """Accept a Windows executable basename, never a path or device name."""
+    if (not name or len(name) > 180 or name != name.strip() or name.endswith(('.', ' '))
+            or re.search(r'[<>:"/\\|?*\x00-\x1f]', name) or not name.lower().endswith('.exe')
+            or name.lower().startswith('unins')
+            or name.split('.')[0].rstrip(' .').upper() in {'CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$',
+                *(f'{prefix}{number}' for prefix in ('COM', 'LPT') for number in range(1, 10))}):
+        raise FlasherError('Enter a valid game EXE filename only, for example My Custom Cube.exe (no folder path).')
+    return name
+
+
+def select_executable(folder: Path, *, custom: bool = False, preferred: str = '') -> str:
+    wanted = executable_name(preferred) if custom and preferred else EXE
+    candidates = [path for path in folder.iterdir() if path.is_file() and not path.is_symlink()
+                  and path.suffix.lower() == '.exe' and not path.name.lower().startswith('unins')]
+    matches = [path for path in candidates if path.name.casefold() == wanted.casefold()]
+    if len(matches) == 1: return executable_name(matches[0].name)
+    if not custom or preferred:
+        raise FlasherError(f'Game folder does not contain the selected game executable: {wanted}')
+    if len(candidates) == 1: return executable_name(candidates[0].name)
+    raise FlasherError('Cannot identify the game EXE. Set its exact filename on tab 06 Settings; '
+                       'automatic detection requires one top-level game EXE (not helpers in subfolders).')
 
 
 def validate_options(options: FlashOptions | None) -> FlashOptions:
     if options is None: raise FlasherError('Userdata is required. Create or choose a userdata folder in the flasher.')
+    if options.custom_portable and not re.fullmatch(r'[0-9a-fA-F]{64}', options.custom_portable_sha256.strip()):
+        raise FlasherError('Custom portable ZIP requires a 64-character SHA-256 from its owner.')
+    if options.custom_portable:
+        for name in (options.custom_executable_name, options.target_executable_name):
+            if name: executable_name(name)
     try: data = json.loads((options.userdata/'userdata.json').read_text(encoding='utf-8'))
     except (ValueError, OSError) as exc: raise FlasherError('Userdata needs a valid userdata.json with schema: 1.') from exc
     if not isinstance(data, dict) or data.get('schema') != 1:
@@ -70,8 +124,11 @@ def apply_options(options: FlashOptions, build: Path, portable: Path) -> None:
     profile = {'schema': 1, 'game_root': True, 'loader': loader, 'scripts': scripts,
                'verbose_python': options.verbose_python, 'safety_cube_alerts': options.safety_cube_alerts,
                'cpeloader_warning': True, 'full_rewrite': options.full_rewrite,
-               'allow_unlocked_updates': options.allow_unlocked_updates,
-               'nuttymod_mods': ['cpeloader-unlocked-updates'] if options.allow_unlocked_updates else []}
+               'allow_unlocked_updates': options.allow_unlocked_updates and not options.custom_portable,
+               'nuttymod_mods': ['cpeloader-unlocked-updates'] if options.allow_unlocked_updates and not options.custom_portable else []}
+    if options.custom_portable:
+        profile['custom_portable'] = {'schema': 1, 'unofficial': True,
+            'sha256': options.custom_portable_sha256.strip().lower(), 'update_provider': 'custom_zip_owner'}
     backend = json.loads((build/'cpe-backend.json').read_text(encoding='utf-8')) if (build/'cpe-backend.json').exists() else {}
     profile['loading_preset'] = 'ortain' if backend.get('loading_preset') == 'ortain' else 'halloween'
     for root in (build, portable): write_json(root/'cpe-flash-profile.json', profile)
@@ -103,9 +160,9 @@ def safe_extract(archive: Path, destination: Path) -> None:
                     shutil.copyfileobj(source, output)
 
 
-def find_portable(root: Path) -> Path:
-    candidates = [p.parent for p in root.rglob(EXE)]
-    if len(candidates) != 1: raise FlasherError('Choose a portable ZIP with exactly one current Cube Beta game executable.')
+def find_portable(root: Path, *, custom: bool = False, preferred: str = '') -> Path:
+    candidates = [p.parent for p in root.rglob('cpeloader_manifest.json' if custom else EXE)]
+    if len(candidates) != 1: raise FlasherError('Choose a portable ZIP with exactly one game folder and integrity manifest.')
     game = candidates[0]
     if not all((game/name).is_file() for name in COMPONENTS):
         raise FlasherError('This portable ZIP predates CPELoader. Download the updated portable release.')
@@ -116,8 +173,13 @@ def find_portable(root: Path) -> Path:
     legacy_helper = 'cpe/go-cache/bin/cpe-go-cache.exe'
     try: baseline = json.loads((game/'cpeloader_manifest.json').read_text(encoding='utf-8'))['files']
     except (ValueError, OSError, KeyError, TypeError): baseline = {}
+    if not isinstance(baseline, dict) or not baseline or any(
+            not isinstance(name, str) or not isinstance(value, str) or not re.fullmatch(r'[0-9a-fA-F]{64}', value)
+            for name, value in baseline.items()):
+        raise FlasherError('Portable ZIP has an invalid integrity manifest.')
     if legacy_helper not in baseline: changes = [name for name in changes if name != legacy_helper]
-    if changes: raise FlasherError('Portable ZIP does not match its release integrity manifest. Use an original download.')
+    if changes and not custom: raise FlasherError('Portable ZIP does not match its release integrity manifest. Use an original download.')
+    select_executable(game, custom=custom, preferred=preferred)
     return game
 
 
@@ -211,16 +273,16 @@ def compile_game(build: Path, python: Path, log: Log) -> Path:
     run_checked([str(python), '-c', "import sys,pygame,pymunk,PyInstaller; assert sys.version_info >= (3,11), 'Python 3.11+ required'"], build, log)
     run_checked([str(python), '-c', "from cpe.backend import CubePhysicsEngine, physics_backend; e=CubePhysicsEngine(); e.execute_line('CPE/1 1 2 200 100 20 1 255 90 30'); e.step(1/60); assert e.snapshot()['engine']=='CPE'; assert hasattr(e,'register_body') and hasattr(physics_backend,'Body')"], build, log)
     run_checked([str(python), '-m', 'PyInstaller', '--noconfirm', '--clean', 'summer_build.spec'], build, log)
-    output = build/'dist'/EXE
+    output = build/'dist'/select_executable(build/'dist', custom=True)
     if not output.is_file() or output.stat().st_size < 1024: raise FlasherError('Compiler did not produce a game executable.')
     return output
 
 
-def create_shortcut(target: Path, destination: Path) -> None:
+def create_shortcut(target: Path, destination: Path, game_executable: str = EXE) -> None:
     if os.name != 'nt': raise FlasherError('Windows shortcuts require Windows.')
     script = "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:CPE_SHORTCUT);$s.TargetPath=$env:CPE_TARGET;$s.WorkingDirectory=$env:CPE_DIRECTORY;$s.IconLocation=$env:CPE_TARGET+',0';$s.Save()"
     environment = os.environ.copy()
-    environment.update(CPE_SHORTCUT=str(destination), CPE_TARGET=str(target/EXE), CPE_DIRECTORY=str(target))
+    environment.update(CPE_SHORTCUT=str(destination), CPE_TARGET=str(target/executable_name(game_executable)), CPE_DIRECTORY=str(target))
     result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', script],
                             env=environment, capture_output=True, text=True, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     if result.returncode != 0 or not destination.is_file(): raise FlasherError('Game installed, but shortcut creation failed: '+result.stderr[:300])
@@ -233,21 +295,29 @@ class PreparedFlash:
     output_zip: Path
     label: str
     full_rewrite: bool = True
+    executable_name: str = EXE
+    previous_executable_name: str = EXE
 
 
 def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | None, project: Path | None,
                   python: Path, log: Log = print, compiler=compile_game, options: FlashOptions | None = None) -> PreparedFlash:
     target = target.resolve()
-    if not (target/EXE).is_file(): raise FlasherError('Target folder does not contain the current Cube Beta executable.')
+    target_exe = select_executable(target, custom=bool(options and options.custom_portable),
+                                   preferred=options.target_executable_name if options else '')
     CPELoader(target).require_flash()
     options = validate_options(options)
+    if options.custom_portable:
+        verify_custom_portable(archive, options.custom_portable_sha256)
+        log(CUSTOM_PORTABLE_WARNING)
     if options.nuttymod_root:
         if not options.full_rewrite: raise FlasherError('Root Mode requires Full rewrite enabled.')
         if options.nuttymod_root.rootmode_tar is None: raise FlasherError('Select required rootmode.tar library.')
         for path in (options.nuttymod_root.loader_zip, options.nuttymod_root.root_tar,
-                     options.nuttymod_root.verification_tar, options.nuttymod_root.official_checksums,
+                     options.nuttymod_root.verification_tar,
                      options.nuttymod_root.rootmode_tar):
             if not path.is_file(): raise FlasherError('Select all NuttyMod Root package files and official SHA256SUMS.txt.')
+        if not options.custom_portable and (options.nuttymod_root.official_checksums is None or not options.nuttymod_root.official_checksums.is_file()):
+            raise FlasherError('Select official SHA256SUMS.txt, or enable custom portable ZIP with its owner-provided SHA-256.')
     workspace = workspace.resolve()
     if workspace.is_relative_to(options.userdata.resolve()) or options.userdata.resolve().is_relative_to(workspace):
         raise FlasherError('Userdata and staging must be separate folders.')
@@ -256,7 +326,8 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
     workspace.mkdir(parents=True, exist_ok=False)
     log('Validating and extracting the portable ZIP…')
     safe_extract(archive, workspace/'portable')
-    portable = find_portable(workspace/'portable')
+    portable = find_portable(workspace/'portable', custom=options.custom_portable, preferred=options.custom_executable_name)
+    portable_exe = select_executable(portable, custom=options.custom_portable, preferred=options.custom_executable_name)
     build = workspace/'game-build'
     if source is not None: stage_source(source, build)
     elif (portable/'game-source.zip').is_file():
@@ -275,7 +346,10 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
         from .custom_cube import stage_custom_cube
         label += ' + ' + stage_custom_cube(options.custom_cube_tar, build, portable, workspace)
     if options.nuttymod_root:
-        label += ' + ' + stage_nuttyroot(options.nuttymod_root, options.loader, archive, build, portable, workspace)
+        label += ' + ' + stage_nuttyroot(options.nuttymod_root, options.loader, archive, build, portable, workspace,
+            custom_portable_sha256=options.custom_portable_sha256 if options.custom_portable else None)
+    if options.custom_portable:
+        label += ' / UNOFFICIAL portable (updates from ZIP owner only)'
     log(f'Rebuilding the whole game for {label}. Target files remain untouched…')
     executable = compiler(build, python, log)
     # Replace source sidecars too, not only the compiled executable.
@@ -289,22 +363,25 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
         stage_source(build, portable)
     # Keep patched loader/source sidecars aligned with the newly rebuilt game.
     for name in COMPONENTS: shutil.copy2(build/name, portable/name)
-    shutil.copy2(executable, portable/EXE)
+    shutil.copy2(executable, portable/portable_exe)
     pack_source(build, portable/'game-source.zip')
     write_json(portable/'cpeloader_state.json', CPELoader(target).state())
     if not CPELoader(portable).unlocked: raise FlasherError('Flashed portable did not retain the unlocked loader state.')
     # Never reseal flashed files: keep the original release's trusted baseline.
-    output = workspace/'The-Cube-Beta-Flashed-Portable.zip'
+    output = workspace/((archive.stem[:120]+'-Flashed.zip') if options.custom_portable else 'The-Cube-Beta-Flashed-Portable.zip')
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as bundle:
         for path in portable.rglob('*'):
             if path.is_file(): bundle.write(path, path.relative_to(portable).as_posix())
     log(f'Flashed ZIP created: {output}')
-    return PreparedFlash(portable, target, output, label, options.full_rewrite)
+    return PreparedFlash(portable, target, output, label, options.full_rewrite, portable_exe, target_exe)
 
 
-def install_flash(plan: PreparedFlash, log: Log = print, shortcut=create_shortcut) -> Path:
+def install_flash(plan: PreparedFlash, log: Log = print, shortcut=None) -> Path:
     target = plan.target.resolve()
     CPELoader(target).require_flash()  # Recheck; the game may have been relocked while compiling.
+    executable_name(plan.executable_name)
+    executable_name(plan.previous_executable_name)
+    if not (plan.portable/plan.executable_name).is_file(): raise FlasherError('Prepared game executable is missing.')
     if plan.portable.resolve().is_relative_to(target): raise FlasherError('Invalid installation staging path.')
     files = [p for p in plan.portable.rglob('*') if p.is_file()]
     for path in files:
@@ -345,6 +422,14 @@ def install_flash(plan: PreparedFlash, log: Log = print, shortcut=create_shortcu
                 previous.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(destination, previous)
                 records.append({'path': relative.as_posix(), 'existed': True, 'delete': True})
+    # A differently named selected game replaces its predecessor even when the
+    # old EXE was renamed after the release manifest, or Full rewrite is off.
+    previous = target/plan.previous_executable_name
+    if (not (plan.portable/previous.name).exists() and previous.is_file()
+            and not any(record['path'].casefold() == previous.name.casefold() for record in records)):
+        (backup/'files').mkdir(exist_ok=True)
+        shutil.copy2(previous, backup/'files'/previous.name)
+        records.append({'path': previous.name, 'existed': True, 'delete': True})
     link = target/'The Cube Beta.lnk'
     if not any(record['path'] == link.name for record in records):
         if link.is_symlink() or (link.exists() and not link.is_file()): raise FlasherError('Conflicting shortcut path.')
@@ -377,7 +462,8 @@ def install_flash(plan: PreparedFlash, log: Log = print, shortcut=create_shortcu
         raise FlasherError(f'Replacement failed and changed files were rolled back. Close the game and retry. Backup: {backup}') from exc
     log(f'Installed {plan.label}. Backup: {backup}')
     # Shortcut creation is deliberately after every game file has been replaced.
-    shortcut(target, target/'The Cube Beta.lnk')
+    if shortcut is None: create_shortcut(target, target/'The Cube Beta.lnk', plan.executable_name)
+    else: shortcut(target, target/'The Cube Beta.lnk')
     differences = CPELoader(target).changes()
     log(f'Game integrity check detects {len(differences)} changed files. The game will show its warning on launch.')
     return backup
@@ -448,10 +534,15 @@ def restore_backup(target: Path, backup: Path, log: Log = print) -> Path:
     return recovery
 
 
-def locate_games() -> list[Path]:
+def locate_games(*, custom: bool = False, preferred: str = '') -> list[Path]:
     candidates = []
     local = os.environ.get('LOCALAPPDATA')
     if local: candidates.append(Path(local)/'Programs'/'The Cube Beta Halloween Update')
     if getattr(sys, 'frozen', False): candidates.append(Path(sys.executable).resolve().parent)
-    return list(dict.fromkeys(path.resolve() for path in candidates
-                             if (path/EXE).is_file() and all((path/name).is_file() for name in COMPONENTS)))
+    found = []
+    for path in candidates:
+        if not path.is_dir() or not all((path/name).is_file() for name in COMPONENTS): continue
+        try: select_executable(path, custom=custom, preferred=preferred)
+        except FlasherError: continue
+        found.append(path.resolve())
+    return list(dict.fromkeys(found))

@@ -1,5 +1,50 @@
 # CPE Flasher Tool
 
+## Settings — custom portable ZIP
+
+**06 Settings → Custom portable ZIP** enables unofficial compatible game ZIPs,
+including NuttyMod runtime portable ZIPs. It is off at every launch. Select the
+ZIP on tab 01 and paste its owner's **64-character SHA-256** into the custom SHA
+field on tab 06. The flasher checks it before extraction or compilation and asks
+for confirmation on enabling the setting and before each custom build.
+
+Custom portable ZIPs may have any filename (for example `My NuttyMod build.zip`).
+The game executable may also be renamed, including spaces or `.EXE`. Leave
+the two optional EXE-name fields on tab 06 blank for automatic detection, or
+enter the exact **filename only** for the EXE inside the ZIP and the installed
+EXE. The installed-EXE Browse button selects its folder too. Detection prefers
+the standard game filename, otherwise requires one top-level EXE; it never
+guesses between multiple custom EXEs or selects helpers from subfolders.
+
+The rebuilt custom ZIP keeps the selected EXE name and is named
+`<input ZIP name>-Flashed.zip`. The game is rebuilt from matching source, not by
+decompiling the input EXE. A custom build spec can emit a renamed top-level EXE
+too. If the installed game had a different EXE name, its selected old EXE is
+backed up and removed when replaced; the shortcut points to the new EXE.
+Restore backup returns the previous EXE and shortcut. Standard mode retains the
+official EXE name and all existing verification requirements.
+
+**WARNING: Unofficial builds are a great SECURITY RISK.** They may run malicious
+code, damage the game or access your files. A matching hash checks consistency,
+not safety or authorship. Only use code and a checksum obtained from an owner you
+trust. No antivirus scan, signature verification or sandbox is provided.
+
+**Unofficial builds cannot use official in-game updates. Updates are provided by
+the owner of the custom ZIP.** The rebuilt game enforces this even when the
+unlocked-update bypass mod is selected or the loader is later relocked. This is
+an application policy, not tamper-proof security or an automatic custom updater.
+Obtain a replacement ZIP and its checksum from that owner, back up the game,
+then repeat the normal unlock/rebuild workflow to install it.
+
+Custom ZIPs still require CPELoader components, a valid integrity manifest,
+complete matching source, userdata and initial unlock. Modified files are
+accepted only in custom mode; the existing baseline is preserved so modification
+warnings remain. Path/size/link checks, backups and restore stay enabled. For
+NuttyMod Root, the custom SHA replaces the official portable checksum file only;
+all loader/TAR package verification remains required. This does not make an
+arbitrary ZIP compatible, and recompilation uses the source selected on tab 01
+or bundled inside the selected ZIP, not the custom EXE itself.
+
 ## Undo and restore
 
 Close the game before restoring. **Undo changes** restores the most recent flash

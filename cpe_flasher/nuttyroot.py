@@ -12,7 +12,7 @@ class NuttyRootInputs:
     loader_zip: Path
     root_tar: Path
     verification_tar: Path
-    official_checksums: Path
+    official_checksums: Path | None
     rootmode_tar: Path | None = None
 
 
@@ -41,18 +41,24 @@ def extract_tar(archive, destination):
                 with bundle.extractfile(member) as source, target.open('wb') as output: shutil.copyfileobj(source, output)
 
 
-def stage_nuttyroot(inputs, loader, archive, build, portable, workspace):
+def stage_nuttyroot(inputs, loader, archive, build, portable, workspace, *, custom_portable_sha256=None):
     from .core import FlasherError, safe_extract, copy_tree
     if loader is None or loader.name != 'nuttymod_loader.py':
         raise FlasherError('NuttyMod Root requires the readable nuttymod_loader.py entry file.')
     if not (build/'nuttymod_root_support.py').is_file() or 'initialize_nuttymod' not in (build/'flashed_runtime.py').read_text(encoding='utf-8'):
         raise FlasherError('Choose updated complete game source with NuttyMod Root support.')
     checksum = digest(archive)
-    try:
-        lines = inputs.official_checksums.read_text(encoding='utf-8-sig').splitlines()
-        accepted = any(line.split()[0].lower() == checksum and line.split()[-1].lstrip('*').endswith('-Portable.zip') for line in lines if len(line.split()) >= 2)
-    except OSError as exc: raise FlasherError('Select SHA256SUMS.txt downloaded from the official game release.') from exc
-    if not accepted: raise FlasherError('Portable ZIP does not match the selected official release checksums.')
+    if custom_portable_sha256 is not None:
+        from .core import verify_custom_portable
+        verify_custom_portable(archive, custom_portable_sha256)
+    else:
+        if inputs.official_checksums is None:
+            raise FlasherError('Select SHA256SUMS.txt downloaded from the official game release.')
+        try:
+            lines = inputs.official_checksums.read_text(encoding='utf-8-sig').splitlines()
+            accepted = any(line.split()[0].lower() == checksum and line.split()[-1].lstrip('*').endswith('-Portable.zip') for line in lines if len(line.split()) >= 2)
+        except OSError as exc: raise FlasherError('Select SHA256SUMS.txt downloaded from the official game release.') from exc
+        if not accepted: raise FlasherError('Portable ZIP does not match the selected official release checksums.')
     stage = workspace/'nuttymod-packages'
     safe_extract(inputs.loader_zip, stage/'loader')
     extract_tar(inputs.root_tar, stage/'root')

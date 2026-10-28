@@ -82,7 +82,15 @@ class CPELoader:
             raise PermissionError('CPELoader is locked. Open the game, press Ctrl+A, then Y to unlock all three loader components before flashing.')
 
     @property
+    def custom_portable(self) -> bool:
+        try:
+            profile = json.loads((self.root/'cpe-flash-profile.json').read_text(encoding='utf-8'))
+            return isinstance(profile, dict) and 'custom_portable' in profile
+        except (ValueError, OSError, TypeError): return False
+
+    @property
     def unlocked_updates_enabled(self) -> bool:
+        if self.custom_portable: return False
         if not self.unlocked: return False
         try:
             profile = json.loads((self.root/'cpe-flash-profile.json').read_text(encoding='utf-8'))
@@ -93,6 +101,9 @@ class CPELoader:
         except (ValueError, OSError, TypeError): return False
 
     def require_in_game_update(self) -> None:
+        if self.custom_portable:
+            raise PermissionError('Unofficial custom portable build: official in-game updates are disabled. '
+                                  'Updates are provided by the owner of the custom ZIP. Keep backups.')
         state = self.state()
         if state.get('state_error') or (state.get('unlocked') is True and not self.unlocked_updates_enabled):
             raise PermissionError('CPELoader is unlocked. Game updates are disabled; use the external installer.')

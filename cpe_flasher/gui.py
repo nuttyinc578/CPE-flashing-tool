@@ -8,8 +8,9 @@ import uuid
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from . import __version__
 
-from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions
+from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, CUSTOM_PORTABLE_WARNING
 from cpeloader import write_json
 from .nuttyroot import NuttyRootInputs
 from .python_discovery import discover_python, check_python
@@ -64,6 +65,10 @@ class FlasherApp(tk.Tk):
         self.nuttyroot = tk.BooleanVar(value=False)
         self.allow_unlocked_updates = tk.BooleanVar(value=False)
         self.custom_cube_tar = tk.StringVar()
+        self.custom_portable = tk.BooleanVar(value=False)
+        self.custom_portable_sha256 = tk.StringVar()
+        self.custom_executable_name = tk.StringVar()
+        self.target_executable_name = tk.StringVar()
         self.nutty_zip = tk.StringVar()
         self.nutty_cp = tk.StringVar()
         self.rootmode_tar = tk.StringVar()
@@ -80,7 +85,7 @@ class FlasherApp(tk.Tk):
         heading = ttk.Frame(header); heading.pack(side='left')
         ttk.Label(heading, text='CPE Flasher Tool', style='Title.TLabel').pack(anchor='w')
         ttk.Label(heading, text='Engine customization. A controlled rebuild. A way back.', style='Muted.TLabel').pack(anchor='w', pady=(2, 0))
-        ttk.Label(header, text='WINDOWS  /  v1.2.1', style='Muted.TLabel').pack(side='right')
+        ttk.Label(header, text=f'WINDOWS  /  v{__version__}', style='Muted.TLabel').pack(side='right')
         self.controls = []
         workspace = ttk.Frame(content); workspace.pack(fill='both', expand=True)
         workspace.columnconfigure(0, weight=3); workspace.columnconfigure(1, weight=1, minsize=270)
@@ -92,6 +97,31 @@ class FlasherApp(tk.Tk):
         nutty = self.scroll_page(notebook, '03 Root')
         bypass = self.scroll_page(notebook, '04 Bypass')
         custom = self.scroll_page(notebook, '05 Custom Cube')
+        settings = self.scroll_page(notebook, '06 Settings')
+        ttk.Label(settings, text='PORTABLE ZIP SETTINGS', style='Section.TLabel').pack(anchor='w', pady=8)
+        custom_zip = ttk.Checkbutton(settings, text='Custom portable ZIP (unofficial / NuttyMod runtime)',
+                                     variable=self.custom_portable, command=self.confirm_custom_portable)
+        custom_zip.pack(anchor='w', pady=8); self.controls.append(custom_zip)
+        ttk.Label(settings, text=CUSTOM_PORTABLE_WARNING, wraplength=540, foreground='#ffba75').pack(anchor='w', pady=8)
+        ttk.Label(settings, text='Custom SHA-256 (64 hexadecimal characters, supplied by the ZIP owner)').pack(anchor='w', pady=(12, 3))
+        custom_sha = ttk.Entry(settings, textvariable=self.custom_portable_sha256)
+        custom_sha.pack(fill='x', pady=(0, 8)); self.controls.append(custom_sha)
+        ttk.Label(settings, text='Game EXE inside custom ZIP (optional; blank = auto-detect)').pack(anchor='w', pady=(12, 3))
+        custom_exe = ttk.Entry(settings, textvariable=self.custom_executable_name)
+        custom_exe.pack(fill='x', pady=(0, 8)); self.controls.append(custom_exe)
+        self.row(settings, 'Installed game EXE (optional; filename only, blank = auto-detect)',
+                 self.target_executable_name, self.pick_target_executable)
+        ttk.Label(settings, text='Custom ZIPs can have any filename. Renamed game EXEs are supported at the game-folder level, '
+            'including spaces and .EXE. If multiple game EXEs are present, enter the exact name. Helpers may remain in subfolders. '
+            'The rebuilt portable keeps its selected EXE name and uses <input ZIP name>-Flashed.zip; the shortcut targets that EXE.',
+            wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
+        ttk.Label(settings, text='Select the ZIP on tab 01. The hash is checked before extraction or compilation. '
+            'Custom mode allows modified files, but still requires a valid integrity manifest, CPELoader components, '
+            'matching source, userdata and the normal unlock. Archive safety checks, backups and modification warnings stay on. '
+            'This setting overrides the update-bypass mod. It does not certify arbitrary ZIPs or add a custom update service.',
+            wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
+        ttk.Label(settings, text='Off by default each time you open the flasher. Confirmation is required before every custom build.',
+            wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(custom, text='CUSTOM CUBE BETA', style='Section.TLabel').pack(anchor='w', pady=8)
         self.row(custom, 'Trusted Python game overlay (.tar), optional', self.custom_cube_tar, lambda: self.pick_file(self.custom_cube_tar, '*.tar'))
         ttk.Label(custom, text='Rebuild a modified game from a Custom Cube TAR. Requires userdata, Full rewrite, an original portable ZIP and an unlocked loader. Python code is executable: only use packages you trust. Backups and warnings remain on.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
@@ -104,7 +134,7 @@ class FlasherApp(tk.Tk):
         ttk.Label(bypass, text='CPELoader unlock updates disabled bypass mod', style='Section.TLabel', wraplength=540).pack(anchor='w', pady=8)
         override = ttk.Checkbutton(bypass, text='Flash mod: allow in-game updates with CPELoader unlocked', variable=self.allow_unlocked_updates)
         override.pack(anchor='w', pady=8); self.controls.append(override)
-        ttk.Label(bypass, text='Optional, off by default. This changes only the game update policy. Initial flashing still requires Ctrl+A → Y. File modification warnings and install backups stay enabled. Updates may replace your mods; keep your original ZIP and backups.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
+        ttk.Label(bypass, text='Optional, off by default. Ignored for custom portable ZIPs: official updates stay blocked. This changes only the game update policy. Initial flashing still requires Ctrl+A → Y. File modification warnings and install backups stay enabled. Updates may replace your mods; keep your original ZIP and backups.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(bypass, text='Other trusted NuttyMod .py loaders and startup scripts can be selected on tab 02. This tab does not make incompatible mods compatible.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         mods = ttk.Button(bypass, text='Choose trusted NuttyMod mods (.py)…', command=self.pick_scripts)
         mods.pack(anchor='w', pady=8); self.controls.append(mods)
@@ -122,9 +152,9 @@ class FlasherApp(tk.Tk):
         self.row(nutty, 'CP — nuttymod_root.tar', self.nutty_cp, lambda: self.pick_file(self.nutty_cp, '*.tar'))
         self.row(nutty, 'Required Root Mode library — rootmode.tar', self.rootmode_tar, lambda: self.pick_file(self.rootmode_tar, '*.tar'))
         self.row(nutty, 'Userdata — nuttymod_cube_verifycation.tar', self.nutty_verify, lambda: self.pick_file(self.nutty_verify, '*.tar'))
-        self.row(nutty, 'SHA256SUMS.txt from the official portable release', self.official_sha, lambda: self.pick_file(self.official_sha, '*.txt'))
+        self.row(nutty, 'Official SHA256SUMS.txt (custom ZIPs use SHA-256 on tab 06 instead)', self.official_sha, lambda: self.pick_file(self.official_sha, '*.txt'))
         ttk.Label(nutty, text='Hashes check consistency, not authorship. Use official releases and trusted packages. Legacy bytecode loaders are incompatible.', wraplength=560, style='Muted.TLabel').pack(anchor='w', pady=8)
-        self.row(inputs, '1. Original Cube Beta portable ZIP', self.archive, self.pick_zip)
+        self.row(inputs, '1. Cube Beta portable ZIP (custom builds require tab 06 opt-in)', self.archive, self.pick_zip)
         self.row(inputs, '2. Installed Cube Beta folder', self.target, lambda: self.pick_folder(self.target))
         locate = ttk.Button(inputs, text='Locate installed game', command=self.locate)
         locate.pack(anchor='w', pady=(0, 10)); self.controls.append(locate)
@@ -171,7 +201,8 @@ class FlasherApp(tk.Tk):
         self.locate(silent=True)
         for variable in (self.archive, self.target, self.project, self.source, self.python,
                          self.userdata, self.loader, self.verbose, self.safety_alerts, self.full_rewrite,
-                         self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates, self.custom_cube_tar):
+                         self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates, self.custom_cube_tar,
+                         self.custom_portable, self.custom_portable_sha256, self.custom_executable_name, self.target_executable_name):
             variable.trace_add('write', self.invalidate_plan)
         if show_warning: self.after_idle(self.startup_warning)
 
@@ -211,6 +242,10 @@ class FlasherApp(tk.Tk):
             'Root means game customization, NOT Windows administrator access. '
             'The flashed ZIP stays unlocked and shows CPELoader warnings.')
 
+    def confirm_custom_portable(self):
+        if self.custom_portable.get() and not messagebox.askyesno('WARNING — unofficial portable ZIP', CUSTOM_PORTABLE_WARNING+'\n\nEnable custom portable ZIP mode?', default='no', icon='warning'):
+            self.custom_portable.set(False)
+
     def create_userdata(self):
         selected = filedialog.askdirectory(title='Choose a folder for userdata')
         if not selected: return
@@ -245,6 +280,12 @@ class FlasherApp(tk.Tk):
         selected = filedialog.askopenfilename(filetypes=[('Portable ZIP', '*.zip')])
         if selected: self.archive.set(selected)
 
+    def pick_target_executable(self):
+        selected = filedialog.askopenfilename(title='Select the installed custom game EXE', filetypes=[('Game executable', '*.exe')])
+        if selected:
+            self.target.set(str(Path(selected).parent))
+            self.target_executable_name.set(Path(selected).name)
+
     def pick_folder(self, variable):
         selected = filedialog.askdirectory()
         if selected: variable.set(selected)
@@ -273,9 +314,9 @@ class FlasherApp(tk.Tk):
         if selected: variable.set(selected)
 
     def locate(self, silent=False):
-        found = locate_games()
+        found = locate_games(custom=self.custom_portable.get(), preferred=self.target_executable_name.get())
         if found: self.target.set(str(found[0]))
-        elif not silent: messagebox.showinfo('Game not found', 'Use Browse to choose the folder containing The Cube Beta Halloween Update.exe.')
+        elif not silent: messagebox.showinfo('Game not found', 'Choose the installed game folder on tab 01. For a renamed custom game EXE, enable custom portable ZIP on tab 06 and select its installed EXE there.')
 
     def log(self, message): self.events.put(('log', message))
 
@@ -294,8 +335,13 @@ class FlasherApp(tk.Tk):
             messagebox.showwarning('Trust required', 'Only flash projects and game sources you trust. Select the trust checkbox to proceed.'); return
         if not all(value.get().strip() for value in (self.archive, self.target, self.python, self.userdata)):
             messagebox.showwarning('Missing input', 'Select a portable ZIP, target game folder, Python interpreter and required userdata folder.'); return
+        if self.custom_portable.get():
+            import re
+            if not re.fullmatch(r'[0-9a-fA-F]{64}', self.custom_portable_sha256.get().strip()):
+                messagebox.showwarning('Custom SHA-256 required', 'Enter the custom ZIP owner\'s 64-character SHA-256 on tab 06 Settings.'); return
+            if not messagebox.askyesno('WARNING — build unofficial ZIP?', CUSTOM_PORTABLE_WARNING+'\n\nFlash this custom ZIP?', default='no', icon='warning'): return
         if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source and project. Continue only if you trust those files?'): return
-        if self.allow_unlocked_updates.get() and not messagebox.askyesno('Enable unlocked game updates?', 'This mod lets the existing in-game updater run while CPELoader is unlocked. Updating may overwrite mods or break compatibility. Integrity warnings remain on. Keep backups. Enable this override?'): return
+        if self.allow_unlocked_updates.get() and not self.custom_portable.get() and not messagebox.askyesno('Enable unlocked game updates?', 'This mod lets the existing in-game updater run while CPELoader is unlocked. Updating may overwrite mods or break compatibility. Integrity warnings remain on. Keep backups. Enable this override?'): return
         archive, target, python = (Path(value.get()) for value in (self.archive, self.target, self.python))
         source = Path(self.source.get()) if self.source.get().strip() else None
         project = Path(self.project.get()) if self.project.get().strip() else None
@@ -303,10 +349,15 @@ class FlasherApp(tk.Tk):
                                self.scripts, self.verbose.get(), self.safety_alerts.get(), self.full_rewrite.get())
         options.allow_unlocked_updates = self.allow_unlocked_updates.get()
         options.custom_cube_tar = Path(self.custom_cube_tar.get()) if self.custom_cube_tar.get().strip() else None
+        options.custom_portable = self.custom_portable.get()
+        options.custom_portable_sha256 = self.custom_portable_sha256.get().strip()
+        options.custom_executable_name = self.custom_executable_name.get()
+        options.target_executable_name = self.target_executable_name.get()
         if self.nuttyroot.get():
-            if not all(v.get().strip() for v in (self.loader, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar)):
-                messagebox.showwarning('NuttyMod Root', 'Select the loader .py, folder ZIP, all three TAR files, and official SHA256SUMS.txt. Root Mode requires Full rewrite.'); return
-            options.nuttymod_root = NuttyRootInputs(*(Path(v.get()) for v in (self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar)))
+            if not all(v.get().strip() for v in (self.loader, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.rootmode_tar)) or (not options.custom_portable and not self.official_sha.get().strip()):
+                messagebox.showwarning('NuttyMod Root', 'Select the loader .py, folder ZIP and all three TAR files. Use official SHA256SUMS.txt, or enable custom portable ZIP and supply its SHA-256 on tab 06. Root Mode requires Full rewrite.'); return
+            options.nuttymod_root = NuttyRootInputs(Path(self.nutty_zip.get()), Path(self.nutty_cp.get()), Path(self.nutty_verify.get()),
+                Path(self.official_sha.get()) if self.official_sha.get().strip() else None, Path(self.rootmode_tar.get()))
         local = Path(os.environ.get('LOCALAPPDATA', str(Path.home())))
         workspace = local/'CPEFlasherTool'/'staging'/uuid.uuid4().hex
         self.plan = None
@@ -315,7 +366,7 @@ class FlasherApp(tk.Tk):
 
     def install(self):
         if self.plan is None: return
-        if not messagebox.askyesno('Replace game files?', f'Close The Cube Beta first.\n\nTarget: {self.plan.target}\n\nBack up and replace the game with the rebuilt portable folder?'):
+        if not messagebox.askyesno('Replace game files?', f'Close The Cube Beta first.\n\nTarget: {self.plan.target}\nBuild: {self.plan.label}\nGame EXE: {self.plan.executable_name}\n\nBack up and replace the game with the rebuilt portable folder?'):
             return
         plan = self.plan
         self.status.set('Backing up and replacing the game…')

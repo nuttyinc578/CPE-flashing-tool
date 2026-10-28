@@ -9,7 +9,13 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
-v1.2.1 adds **Custom Cube Beta** Python TAR packages, the bundled **CPE Series 2 — Ortain**
+v1.2.2 adds **06 Settings → Custom portable ZIP** for compatible unofficial builds,
+including NuttyMod runtime ZIPs, owner-provided SHA-256 verification, and renamed
+EXE/ZIP support. Unofficial builds cannot use official in-game updates, even
+with the update-bypass mod; their ZIP owner provides updates. Keep backups and
+only compile trusted source. See [v1.2.2 release notes](RELEASE_NOTES_1.2.2.md).
+
+v1.2.1 added **Custom Cube Beta** Python TAR packages, the bundled **CPE Series 2 — Ortain**
 project and its custom loading screen. See [Custom Cube guide](CUSTOM_CUBE.md)
 and [changelog](CHANGELOG.md). v1.2.0 adds the **NuttyMod Bypass** tab with an opt-in unlocked-update mod,
 trusted Python mod selection, Python installation/venv directory detection,
@@ -44,6 +50,9 @@ flasher does not upload userdata or logs.
 The release app bundles current complete game rebuild source. Use all Root
 TAR/loader files from the same package set and enable Full rewrite. Use an
 original official portable ZIP, not a previously flashed ZIP.
+For a compatible unofficial or previously modified build, explicitly enable
+Custom portable ZIP on tab 06 and supply its owner's SHA-256 instead. Renamed
+game EXEs can be detected automatically or selected by exact filename there.
 
 ## Build from source
 

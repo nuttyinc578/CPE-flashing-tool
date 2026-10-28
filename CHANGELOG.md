@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.2
+
+- Renamed custom portable ZIPs and game EXEs now work through discovery, rebuilding, replacement, backup/restore and shortcut creation. Optional exact-name fields resolve multiple-EXE ambiguity; custom output ZIPs keep the input ZIP stem.
+- New **06 Settings** tab with opt-in **Custom portable ZIP**, including NuttyMod runtime builds, owner-supplied SHA-256 text, and explicit unofficial-build security warnings.
+- Verify the custom ZIP hash before extraction/rebuild; keep integrity warnings, initial unlock, safe archive handling, backups and restore.
+- Custom builds block official in-game updates even with the update-bypass mod; their ZIP owner provides updates. NuttyMod Root retains package verification while allowing the custom ZIP hash instead of an official portable checksum file.
+
 ## 1.2.1
 
 - New **05 Custom Cube** tab accepts a trusted `.tar` with Python game overlays.
