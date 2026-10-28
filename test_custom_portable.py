@@ -166,7 +166,7 @@ class CustomPortableTests(unittest.TestCase):
         with zipfile.ZipFile(plan.output_zip) as bundle: self.assertIn(name, bundle.namelist())
         with patch('cpe_flasher.core.create_shortcut') as shortcut:
             backup = install_flash(plan, lambda message: None)
-        shortcut.assert_called_once_with(self.target.resolve(), self.target/'The Cube Beta.lnk', name)
+        shortcut.assert_called_once_with(self.target.resolve(), self.target.resolve()/'The Cube Beta.lnk', name)
         self.assertEqual((self.target/name).read_bytes(), b'rebuilt game for Rephysics')
         self.assertFalse((self.target/EXE).exists())
         self.assertEqual((backup/'files'/EXE).read_bytes(), b'original game')
