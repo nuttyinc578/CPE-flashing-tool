@@ -9,7 +9,14 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
-v1.2.2 adds **06 Settings → Custom portable ZIP** for compatible unofficial builds,
+v1.2.3 adds **Allow custom code, menus and files** and experimental **Remove old
+portable ZIP restrictions** under tab 06. Both are off by default, require
+confirmation and Full rewrite, and retain checksum, unlock, warning and backup
+requirements. Old ZIP import still needs compatible complete source and an
+unlocked current game; it does not decompile old EXEs. See
+[v1.2.3 release notes](RELEASE_NOTES_1.2.3.md).
+
+v1.2.2 added **06 Settings → Custom portable ZIP** for compatible unofficial builds,
 including NuttyMod runtime ZIPs, owner-provided SHA-256 verification, and renamed
 EXE/ZIP support. Unofficial builds cannot use official in-game updates, even
 with the update-bypass mod; their ZIP owner provides updates. Keep backups and

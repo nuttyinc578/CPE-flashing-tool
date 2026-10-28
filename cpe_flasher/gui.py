@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from . import __version__
 
-from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, CUSTOM_PORTABLE_WARNING
+from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, CUSTOM_PORTABLE_WARNING, CUSTOM_FILES_WARNING, OLD_PORTABLE_WARNING
 from cpeloader import write_json
 from .nuttyroot import NuttyRootInputs
 from .python_discovery import discover_python, check_python
@@ -52,6 +52,7 @@ class FlasherApp(tk.Tk):
         self.target = tk.StringVar()
         self.project = tk.StringVar()
         self.source = tk.StringVar(value=str(root) if (root/'cube_core.py').exists() else '')
+        self.bundled_source = self.source.get()
         interpreters = discover_python((root, root.parent/'THE-CUBE-GITHUB'))
         self.python = tk.StringVar(value=str(interpreters[0]) if interpreters else '')
         self.trust = tk.BooleanVar(value=False)
@@ -66,6 +67,8 @@ class FlasherApp(tk.Tk):
         self.allow_unlocked_updates = tk.BooleanVar(value=False)
         self.custom_cube_tar = tk.StringVar()
         self.custom_portable = tk.BooleanVar(value=False)
+        self.allow_custom_files = tk.BooleanVar(value=False)
+        self.remove_old_portable_restrictions = tk.BooleanVar(value=False)
         self.custom_portable_sha256 = tk.StringVar()
         self.custom_executable_name = tk.StringVar()
         self.target_executable_name = tk.StringVar()
@@ -103,6 +106,14 @@ class FlasherApp(tk.Tk):
                                      variable=self.custom_portable, command=self.confirm_custom_portable)
         custom_zip.pack(anchor='w', pady=8); self.controls.append(custom_zip)
         ttk.Label(settings, text=CUSTOM_PORTABLE_WARNING, wraplength=540, foreground='#ffba75').pack(anchor='w', pady=8)
+        custom_files = ttk.Checkbutton(settings, text='Allow custom code, menus and files (requires custom ZIP + Full rewrite)',
+                                       variable=self.allow_custom_files, command=self.confirm_custom_files)
+        custom_files.pack(anchor='w', pady=8); self.controls.append(custom_files)
+        ttk.Label(settings, text=CUSTOM_FILES_WARNING, wraplength=540, foreground='#ffba75').pack(anchor='w', pady=8)
+        old_zip = ttk.Checkbutton(settings, text='Remove old portable ZIP restrictions (experimental input compatibility)',
+                                 variable=self.remove_old_portable_restrictions, command=self.confirm_old_portable)
+        old_zip.pack(anchor='w', pady=8); self.controls.append(old_zip)
+        ttk.Label(settings, text=OLD_PORTABLE_WARNING, wraplength=540, foreground='#ffba75').pack(anchor='w', pady=8)
         ttk.Label(settings, text='Custom SHA-256 (64 hexadecimal characters, supplied by the ZIP owner)').pack(anchor='w', pady=(12, 3))
         custom_sha = ttk.Entry(settings, textvariable=self.custom_portable_sha256)
         custom_sha.pack(fill='x', pady=(0, 8)); self.controls.append(custom_sha)
@@ -202,7 +213,8 @@ class FlasherApp(tk.Tk):
         for variable in (self.archive, self.target, self.project, self.source, self.python,
                          self.userdata, self.loader, self.verbose, self.safety_alerts, self.full_rewrite,
                          self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates, self.custom_cube_tar,
-                         self.custom_portable, self.custom_portable_sha256, self.custom_executable_name, self.target_executable_name):
+                         self.custom_portable, self.custom_portable_sha256, self.custom_executable_name, self.target_executable_name,
+                         self.allow_custom_files, self.remove_old_portable_restrictions):
             variable.trace_add('write', self.invalidate_plan)
         if show_warning: self.after_idle(self.startup_warning)
 
@@ -245,6 +257,33 @@ class FlasherApp(tk.Tk):
     def confirm_custom_portable(self):
         if self.custom_portable.get() and not messagebox.askyesno('WARNING — unofficial portable ZIP', CUSTOM_PORTABLE_WARNING+'\n\nEnable custom portable ZIP mode?', default='no', icon='warning'):
             self.custom_portable.set(False)
+
+    def confirm_custom_files(self):
+        if not self.allow_custom_files.get(): return
+        if not self.custom_portable.get():
+            self.allow_custom_files.set(False)
+            messagebox.showwarning('Custom portable ZIP required', 'Enable Custom portable ZIP first, then choose whether to allow its custom code, menus and files.')
+            return
+        if not messagebox.askyesno('WARNING — custom code, menus and files', CUSTOM_FILES_WARNING+
+                '\n\nFull rewrite will be enabled. Default bundled source will be cleared so the ZIP\'s source is used; '
+                'you can select matching external source on tab 01 instead. Continue?', default='no', icon='warning'):
+            self.allow_custom_files.set(False)
+            return
+        self.full_rewrite.set(True)
+        if self.bundled_source and self.source.get() == self.bundled_source:
+            self.source.set('')
+
+    def confirm_old_portable(self):
+        if not self.remove_old_portable_restrictions.get(): return
+        if not self.custom_portable.get():
+            self.remove_old_portable_restrictions.set(False)
+            messagebox.showwarning('Custom portable ZIP required', 'Enable Custom portable ZIP first; the old ZIP still needs its trusted SHA-256.')
+            return
+        if not messagebox.askyesno('WARNING — remove old portable ZIP restrictions?', OLD_PORTABLE_WARNING+
+                                  '\n\nFull rewrite will be enabled. Allow experimental old ZIP import?', default='no', icon='warning'):
+            self.remove_old_portable_restrictions.set(False)
+            return
+        self.full_rewrite.set(True)
 
     def create_userdata(self):
         selected = filedialog.askdirectory(title='Choose a folder for userdata')
@@ -340,6 +379,14 @@ class FlasherApp(tk.Tk):
             if not re.fullmatch(r'[0-9a-fA-F]{64}', self.custom_portable_sha256.get().strip()):
                 messagebox.showwarning('Custom SHA-256 required', 'Enter the custom ZIP owner\'s 64-character SHA-256 on tab 06 Settings.'); return
             if not messagebox.askyesno('WARNING — build unofficial ZIP?', CUSTOM_PORTABLE_WARNING+'\n\nFlash this custom ZIP?', default='no', icon='warning'): return
+        if self.allow_custom_files.get():
+            if not self.custom_portable.get() or not self.full_rewrite.get():
+                messagebox.showwarning('Custom file requirements', 'Custom code, menus and files require Custom portable ZIP and Full rewrite.'); return
+            if not messagebox.askyesno('WARNING — compile custom menus and files?', CUSTOM_FILES_WARNING+'\n\nBuild these trusted custom files?', default='no', icon='warning'): return
+        if self.remove_old_portable_restrictions.get():
+            if not self.custom_portable.get() or not self.full_rewrite.get():
+                messagebox.showwarning('Old ZIP requirements', 'Old ZIP import requires Custom portable ZIP and Full rewrite.'); return
+            if not messagebox.askyesno('WARNING — use old portable ZIP?', OLD_PORTABLE_WARNING+'\n\nContinue with this experimental import?', default='no', icon='warning'): return
         if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source and project. Continue only if you trust those files?'): return
         if self.allow_unlocked_updates.get() and not self.custom_portable.get() and not messagebox.askyesno('Enable unlocked game updates?', 'This mod lets the existing in-game updater run while CPELoader is unlocked. Updating may overwrite mods or break compatibility. Integrity warnings remain on. Keep backups. Enable this override?'): return
         archive, target, python = (Path(value.get()) for value in (self.archive, self.target, self.python))
@@ -353,6 +400,8 @@ class FlasherApp(tk.Tk):
         options.custom_portable_sha256 = self.custom_portable_sha256.get().strip()
         options.custom_executable_name = self.custom_executable_name.get()
         options.target_executable_name = self.target_executable_name.get()
+        options.allow_custom_files = self.allow_custom_files.get()
+        options.remove_old_portable_restrictions = self.remove_old_portable_restrictions.get()
         if self.nuttyroot.get():
             if not all(v.get().strip() for v in (self.loader, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.rootmode_tar)) or (not options.custom_portable and not self.official_sha.get().strip()):
                 messagebox.showwarning('NuttyMod Root', 'Select the loader .py, folder ZIP and all three TAR files. Use official SHA256SUMS.txt, or enable custom portable ZIP and supply its SHA-256 on tab 06. Root Mode requires Full rewrite.'); return

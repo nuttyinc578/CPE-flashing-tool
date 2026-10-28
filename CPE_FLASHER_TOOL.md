@@ -2,6 +2,58 @@
 
 ## Settings — custom portable ZIP
 
+### Remove old portable ZIP restrictions
+
+The tab 06 option **Remove old portable ZIP restrictions** is off by default.
+Enable Custom portable ZIP first, supply its trusted SHA-256, then accept the
+experimental import warning. Full rewrite is enabled; confirmation is required
+again before building. This relaxes **input ZIP compatibility only**: an older
+ZIP may lack today's CPELoader sidecars or have a missing/obsolete integrity
+manifest. If it has several EXEs, enter the exact game EXE filename on tab 06;
+the flasher will not guess between unknown helper/game EXEs.
+
+**Warning:** older files may be incompatible and corrupt the game. This does
+not decompile an old EXE or automatically reproduce its historical menu/version.
+You still need compatible complete rebuild source, required userdata, compiler
+dependencies and a current installed game whose CPELoader is unlocked. Old
+installed games with no loader are not made flashable by this input option.
+
+The current target's existing valid integrity manifest is retained as the
+rebuilt portable's baseline; unverified old files are never newly sealed as
+trusted. Modern loader components come from the compatible selected source,
+with the flasher's managed policy applied. Missing/incompatible source stops
+before compiling or installation. Archive path/link/size checks, target unlock,
+backups, restore, modification warnings and the unofficial-build update block
+remain enabled. Normal strict ZIP validation is unchanged when this is off.
+
+### Allow custom code, menus and files
+
+On tab 06, enable **Custom portable ZIP**, then optionally enable **Allow custom
+code, menus and files**. It is off at each launch and requires confirmation on
+enabling and before each build. Full rewrite is required and is enabled after
+you accept. Default bundled source is cleared so the selected ZIP's complete
+`game-source.zip` can provide its custom menu; alternatively select matching
+external source on tab 01. A deliberately selected external source is retained.
+
+**Custom ZIPs are great for your own menus and files, but they are a serious
+SECURITY RISK.** Untrusted code can access/change your files, steal information
+or corrupt the game while compiling or playing. A hash does not certify safety.
+Only use trusted code; this feature is not a sandbox.
+
+This preserves additional source folders such as `menus/`, `assets/` and other
+regular game files in the staging build, rebuilt portable and source archive.
+Your source must actually connect the menu to the game, and your PyInstaller
+spec must include any required data/dynamic imports. Copying a menu file alone
+does not automatically activate it, generate a menu or decompile an EXE.
+Managed loader policy remains supplied by the flasher, and official updates
+remain blocked. Normal archive checks, backups, undo and restore stay enabled.
+
+Common hidden files, credentials/key files, caches, backups and userdata in
+the selected source are skipped. This is **not a complete secret detector or
+ZIP sanitizer**: inspect all selected packages, userdata and the output before
+sharing. Source/staging folders must be separate; source copying is limited to
+20,000 files / 2 GB. Required userdata is still selected separately on tab 02.
+
 **06 Settings → Custom portable ZIP** enables unofficial compatible game ZIPs,
 including NuttyMod runtime portable ZIPs. It is off at every launch. Select the
 ZIP on tab 01 and paste its owner's **64-character SHA-256** into the custom SHA

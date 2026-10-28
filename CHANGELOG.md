@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.3
+
+- Optional **Remove old portable ZIP restrictions** allows experimental import of input ZIPs without today's loader sidecars/integrity format. It keeps the current target's original baseline, uses compatible modern rebuild source, and retains unlock, hash, archive-safety, warning and backup requirements.
+- Optional **Allow custom code, menus and files** under tab 06 preserves additional compatible source folders/assets through rebuilding, portable ZIP creation and source repacking.
+- Explicit benefit/security warning and per-build confirmation; requires custom ZIP mode, owner SHA-256, matching complete source and Full rewrite. Managed loader policy, update block, archive checks and backup/restore remain on.
+- Clear the default bundled source on accepting this mode so custom ZIP source is not silently replaced. Common private source files, machine state, caches and backups are skipped; output must still be reviewed before sharing.
+
 ## 1.2.2
 
 - Renamed custom portable ZIPs and game EXEs now work through discovery, rebuilding, replacement, backup/restore and shortcut creation. Optional exact-name fields resolve multiple-EXE ambiguity; custom output ZIPs keep the input ZIP stem.

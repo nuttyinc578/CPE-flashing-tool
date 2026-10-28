@@ -41,6 +41,8 @@ class FlashOptions:
     custom_portable_sha256: str = ''
     custom_executable_name: str = ''
     target_executable_name: str = ''
+    allow_custom_files: bool = False
+    remove_old_portable_restrictions: bool = False
 
 
 CUSTOM_PORTABLE_WARNING = (
@@ -49,6 +51,27 @@ CUSTOM_PORTABLE_WARNING = (
     'game, or access your files. A matching SHA-256 does not prove a build is safe '
     'or official. Unofficial builds cannot use official in-game updates; updates '
     'are provided by the owner of the custom ZIP. Keep a trusted original and backups.'
+)
+
+CUSTOM_FILES_WARNING = (
+    'Custom ZIPs are great for creating your own menus, code and game files, '
+    'but they are a serious SECURITY RISK. Untrusted code can access or change '
+    'your files, steal information, or corrupt the game while compiling or playing. '
+    'A matching SHA-256 does not prove safety. Only use source you trust. '
+    'This is not a sandbox. Review files for private information before sharing '
+    'the rebuilt ZIP. Backups and loader warnings stay on; official updates remain '
+    'blocked for unofficial builds.'
+)
+
+OLD_PORTABLE_WARNING = (
+    'WARNING: Removing old portable ZIP restrictions is EXPERIMENTAL. Older '
+    'input ZIPs may lack current CPELoader files or a valid integrity manifest, '
+    'and incompatible files may corrupt the game. This does not decompile an '
+    'old EXE or recreate its original version. Compatible complete rebuild '
+    'source, a trusted ZIP SHA-256, Full rewrite, and an unlocked current game '
+    'installation with its original integrity baseline are still required. '
+    'Archive safety checks, backups and loader warnings stay enabled. '
+    'Official in-game updates remain blocked. Keep a trusted original and backups.'
 )
 
 
@@ -89,6 +112,10 @@ def select_executable(folder: Path, *, custom: bool = False, preferred: str = ''
 
 def validate_options(options: FlashOptions | None) -> FlashOptions:
     if options is None: raise FlasherError('Userdata is required. Create or choose a userdata folder in the flasher.')
+    if options.allow_custom_files and (not options.custom_portable or not options.full_rewrite):
+        raise FlasherError('Custom code, menus and files require Custom portable ZIP and Full rewrite enabled.')
+    if options.remove_old_portable_restrictions and (not options.custom_portable or not options.full_rewrite):
+        raise FlasherError('Remove old portable ZIP restrictions requires Custom portable ZIP and Full rewrite enabled.')
     if options.custom_portable and not re.fullmatch(r'[0-9a-fA-F]{64}', options.custom_portable_sha256.strip()):
         raise FlasherError('Custom portable ZIP requires a 64-character SHA-256 from its owner.')
     if options.custom_portable:
@@ -128,7 +155,11 @@ def apply_options(options: FlashOptions, build: Path, portable: Path) -> None:
                'nuttymod_mods': ['cpeloader-unlocked-updates'] if options.allow_unlocked_updates and not options.custom_portable else []}
     if options.custom_portable:
         profile['custom_portable'] = {'schema': 1, 'unofficial': True,
-            'sha256': options.custom_portable_sha256.strip().lower(), 'update_provider': 'custom_zip_owner'}
+            'sha256': options.custom_portable_sha256.strip().lower(), 'update_provider': 'custom_zip_owner',
+            'allow_custom_files': options.allow_custom_files,
+            'remove_old_portable_restrictions': options.remove_old_portable_restrictions}
+        if options.remove_old_portable_restrictions:
+            profile['custom_portable']['integrity_baseline_source'] = 'installed_game'
     backend = json.loads((build/'cpe-backend.json').read_text(encoding='utf-8')) if (build/'cpe-backend.json').exists() else {}
     profile['loading_preset'] = 'ortain' if backend.get('loading_preset') == 'ortain' else 'halloween'
     for root in (build, portable): write_json(root/'cpe-flash-profile.json', profile)
@@ -160,7 +191,35 @@ def safe_extract(archive: Path, destination: Path) -> None:
                     shutil.copyfileobj(source, output)
 
 
-def find_portable(root: Path, *, custom: bool = False, preferred: str = '') -> Path:
+def find_old_portable(root: Path, preferred: str = '') -> Path:
+    executables = [path for path in root.rglob('*') if path.is_file() and path.suffix.lower() == '.exe'
+                   and not path.name.lower().startswith('unins')]
+    wanted = executable_name(preferred) if preferred else EXE
+    matches = [path for path in executables if path.name.casefold() == wanted.casefold()]
+    if not preferred and not matches and len(executables) == 1: matches = executables
+    if len(matches) != 1:
+        raise FlasherError('Cannot identify the old portable game EXE. Enter its exact filename on tab 06 Settings; '
+                           'do not select a helper or a ZIP containing multiple game versions.')
+    game = matches[0].parent
+    select_executable(game, custom=True, preferred=matches[0].name)
+    return game
+
+
+def check_installed_baseline(target: Path) -> None:
+    try:
+        files = json.loads((target/'cpeloader_manifest.json').read_text(encoding='utf-8'))['files']
+        if not isinstance(files, dict) or not files or any(
+                not isinstance(name, str) or not isinstance(value, str) or not re.fullmatch(r'[0-9a-fA-F]{64}', value)
+                for name, value in files.items()): raise ValueError('invalid baseline')
+    except (ValueError, OSError, KeyError, TypeError) as exc:
+        raise FlasherError('Old ZIP import requires the installed game\'s valid original integrity manifest. '
+                           'Restore/reinstall the current game first; no new trusted baseline will be invented.') from exc
+
+
+def find_portable(root: Path, *, custom: bool = False, preferred: str = '', remove_old_restrictions: bool = False) -> Path:
+    if remove_old_restrictions:
+        if not custom: raise FlasherError('Old ZIP import requires Custom portable ZIP enabled.')
+        return find_old_portable(root, preferred)
     candidates = [p.parent for p in root.rglob('cpeloader_manifest.json' if custom else EXE)]
     if len(candidates) != 1: raise FlasherError('Choose a portable ZIP with exactly one game folder and integrity manifest.')
     game = candidates[0]
@@ -199,8 +258,43 @@ def source_root(folder: Path) -> Path:
     return folder
 
 
-def stage_source(folder: Path, destination: Path) -> None:
+def stage_custom_source(folder: Path, destination: Path) -> None:
+    """Copy opted-in game source/data, not a personal folder or machine state."""
+    folder, destination = folder.resolve(), destination.resolve()
+    if folder == destination or destination.is_relative_to(folder) or folder.is_relative_to(destination):
+        raise FlasherError('Custom source and its staging destination must be separate folders.')
+    excluded = {name.casefold() for name in EXCLUDED_DIRS} | {'userdata', 'venv', 'env', 'update_backups', 'tests', 'test', 'out'}
+    count = size = 0
+    for current, directories, filenames in os.walk(folder, followlinks=False):
+        kept = []
+        for name in directories:
+            if name.startswith('.') or name.casefold() in excluded: continue
+            path = Path(current)/name
+            if path.is_symlink() or getattr(path, 'is_junction', lambda: False)():
+                raise FlasherError('Custom source links/junctions are not supported.')
+            kept.append(name)
+        directories[:] = kept
+        for name in filenames:
+            path = Path(current)/name
+            if (name.startswith('.') or name.casefold() in {'cpeloader_state.json', 'cpeloader_manifest.json', 'game-source.zip'}
+                    or path.suffix.lower() in {'.pyc', '.log', '.tmp', '.writing', '.pem', '.key', '.pfx', '.p12'}
+                    or name.casefold() in {'credentials', 'credentials.json', 'secrets.json'}): continue
+            if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(folder):
+                raise FlasherError('Custom source contains an unsafe file link.')
+            count += 1; size += path.stat().st_size
+            if count > 20000 or size > 2 * 1024**3:
+                raise FlasherError('Custom source exceeds the 20,000 file / 2 GB limit.')
+            target = destination/path.relative_to(folder)
+            if not target.resolve().is_relative_to(destination): raise FlasherError('Unsafe custom source destination.')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+
+
+def stage_source(folder: Path, destination: Path, *, custom_files: bool = False) -> None:
     source_root(folder)
+    if custom_files:
+        stage_custom_source(folder, destination)
+        return
     destination.mkdir(parents=True, exist_ok=True)
     # Only game build inputs, never caches, credentials, local state or backups.
     for path in folder.iterdir():
@@ -217,10 +311,10 @@ def stage_source(folder: Path, destination: Path) -> None:
                     shutil.copy2(path, target)
 
 
-def pack_source(folder: Path, archive: Path) -> None:
+def pack_source(folder: Path, archive: Path, *, custom_files: bool = False) -> None:
     # Reuse the exact staging policy used by the GUI for release source bundles.
     stage = archive.parent/('source-'+uuid.uuid4().hex)
-    stage_source(folder, stage)
+    stage_source(folder, stage, custom_files=custom_files)
     try:
         with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as bundle:
             for path in stage.rglob('*'):
@@ -309,6 +403,10 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
     if options.custom_portable:
         verify_custom_portable(archive, options.custom_portable_sha256)
         log(CUSTOM_PORTABLE_WARNING)
+    if options.allow_custom_files: log(CUSTOM_FILES_WARNING)
+    if options.remove_old_portable_restrictions:
+        check_installed_baseline(target)
+        log(OLD_PORTABLE_WARNING)
     if options.nuttymod_root:
         if not options.full_rewrite: raise FlasherError('Root Mode requires Full rewrite enabled.')
         if options.nuttymod_root.rootmode_tar is None: raise FlasherError('Select required rootmode.tar library.')
@@ -326,14 +424,25 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
     workspace.mkdir(parents=True, exist_ok=False)
     log('Validating and extracting the portable ZIP…')
     safe_extract(archive, workspace/'portable')
-    portable = find_portable(workspace/'portable', custom=options.custom_portable, preferred=options.custom_executable_name)
+    portable = find_portable(workspace/'portable', custom=options.custom_portable, preferred=options.custom_executable_name,
+                             remove_old_restrictions=options.remove_old_portable_restrictions)
+    if options.remove_old_portable_restrictions:
+        # Preserve a real existing baseline, not a new seal for unverified old files.
+        shutil.copy2(target/'cpeloader_manifest.json', portable/'cpeloader_manifest.json')
     portable_exe = select_executable(portable, custom=options.custom_portable, preferred=options.custom_executable_name)
     build = workspace/'game-build'
-    if source is not None: stage_source(source, build)
+    if source is not None: stage_source(source, build, custom_files=options.allow_custom_files)
     elif (portable/'game-source.zip').is_file():
-        safe_extract(portable/'game-source.zip', build)
-        source_root(build)
+        if options.allow_custom_files:
+            extracted_source = workspace/'custom-game-source'
+            safe_extract(portable/'game-source.zip', extracted_source)
+            stage_source(extracted_source, build, custom_files=True)
+        else:
+            safe_extract(portable/'game-source.zip', build)
+            source_root(build)
     else: raise FlasherError('Older portable ZIP: select matching game source for recompilation.')
+    if options.remove_old_portable_restrictions and not all((build/name).is_file() for name in COMPONENTS):
+        raise FlasherError('Old ZIP import needs compatible complete rebuild source with all current CPELoader components.')
     # Update our owned loader policy inside both the compiled game and sidecars.
     runtime_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
     shutil.copy2(runtime_root/'cpeloader.py', build/'cpeloader.py')
@@ -350,6 +459,7 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
             custom_portable_sha256=options.custom_portable_sha256 if options.custom_portable else None)
     if options.custom_portable:
         label += ' / UNOFFICIAL portable (updates from ZIP owner only)'
+    if options.remove_old_portable_restrictions: label += ' / EXPERIMENTAL old ZIP import'
     log(f'Rebuilding the whole game for {label}. Target files remain untouched…')
     executable = compiler(build, python, log)
     # Replace source sidecars too, not only the compiled executable.
@@ -360,11 +470,11 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
                 and (len(relative.parts) == 1 or relative.parts[0] in {'cpe', 'cpe_rephysics', 'cpe_project', 'addons', 'themes', 'repair_payload'})
                 and not (build/relative).is_file()):
                 old.unlink()  # Only the validated staging copy, never the installed game.
-        stage_source(build, portable)
+        stage_source(build, portable, custom_files=options.allow_custom_files)
     # Keep patched loader/source sidecars aligned with the newly rebuilt game.
     for name in COMPONENTS: shutil.copy2(build/name, portable/name)
     shutil.copy2(executable, portable/portable_exe)
-    pack_source(build, portable/'game-source.zip')
+    pack_source(build, portable/'game-source.zip', custom_files=options.allow_custom_files)
     write_json(portable/'cpeloader_state.json', CPELoader(target).state())
     if not CPELoader(portable).unlocked: raise FlasherError('Flashed portable did not retain the unlocked loader state.')
     # Never reseal flashed files: keep the original release's trusted baseline.
