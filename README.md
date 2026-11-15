@@ -9,7 +9,9 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
-v1.2.3 adds **Allow custom code, menus and files** and experimental **Remove old
+v1.2.5 supports free 6.4.1, 6.4.2 and 6.4.3-nightly.2, with a countdown to the planned December 2 Christmas stable update. See [compatibility and build requirements](RELEASE_NOTES_1.2.5.md).
+
+v1.2.3 added **Allow custom code, menus and files** and experimental **Remove old
 portable ZIP restrictions** under tab 06. Both are off by default, require
 confirmation and Full rewrite, and retain checksum, unlock, warning and backup
 requirements. Old ZIP import still needs compatible complete source and an

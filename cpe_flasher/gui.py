@@ -9,8 +9,9 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from . import __version__
+from .releases import countdown
 
-from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, CUSTOM_PORTABLE_WARNING, CUSTOM_FILES_WARNING, OLD_PORTABLE_WARNING
+from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, bundled_source_path, CUSTOM_PORTABLE_WARNING, CUSTOM_FILES_WARNING, OLD_PORTABLE_WARNING
 from cpeloader import write_json
 from .nuttyroot import NuttyRootInputs
 from .python_discovery import discover_python, check_python
@@ -51,8 +52,10 @@ class FlasherApp(tk.Tk):
         self.archive = tk.StringVar()
         self.target = tk.StringVar()
         self.project = tk.StringVar()
-        self.source = tk.StringVar(value=str(root) if (root/'cube_core.py').exists() else '')
+        bundled = bundled_source_path(root)
+        self.source = tk.StringVar(value=str(bundled) if bundled else '')
         self.bundled_source = self.source.get()
+        self._source_cleared_for_custom_files = False
         interpreters = discover_python((root, root.parent/'THE-CUBE-GITHUB'))
         self.python = tk.StringVar(value=str(interpreters[0]) if interpreters else '')
         self.trust = tk.BooleanVar(value=False)
@@ -89,6 +92,9 @@ class FlasherApp(tk.Tk):
         ttk.Label(heading, text='CPE Flasher Tool', style='Title.TLabel').pack(anchor='w')
         ttk.Label(heading, text='Engine customization. A controlled rebuild. A way back.', style='Muted.TLabel').pack(anchor='w', pady=(2, 0))
         ttk.Label(header, text=f'WINDOWS  /  v{__version__}', style='Muted.TLabel').pack(side='right')
+        self.christmas_clock=tk.StringVar()
+        ttk.Label(heading,textvariable=self.christmas_clock,foreground='#99ead4').pack(anchor='w')
+        self.tick_christmas()
         self.controls = []
         workspace = ttk.Frame(content); workspace.pack(fill='both', expand=True)
         workspace.columnconfigure(0, weight=3); workspace.columnconfigure(1, weight=1, minsize=270)
@@ -96,6 +102,8 @@ class FlasherApp(tk.Tk):
         notebook = ttk.Notebook(workspace); notebook.grid(row=0, column=0, sticky='nsew', padx=(0, 20))
         self.notebook = notebook
         inputs = self.scroll_page(notebook, '01 Game')
+        ttk.Label(inputs,text='Free editions: 6.4.1 · 6.4.2 · 6.4.3-nightly.2 · 6.4.3 (planned Dec 2). Match the ZIP and installed version.',
+                  wraplength=560,style='Muted.TLabel').pack(anchor='w',pady=4)
         options = self.scroll_page(notebook, '02 Userdata')
         nutty = self.scroll_page(notebook, '03 Root')
         bypass = self.scroll_page(notebook, '04 Bypass')
@@ -113,6 +121,9 @@ class FlasherApp(tk.Tk):
         old_zip = ttk.Checkbutton(settings, text='Remove old portable ZIP restrictions (experimental input compatibility)',
                                  variable=self.remove_old_portable_restrictions, command=self.confirm_old_portable)
         old_zip.pack(anchor='w', pady=8); self.controls.append(old_zip)
+        ttk.Label(settings, text='Checked = old input ZIP checks DISABLED. Unchecked = standard ZIP checks ENABLED. '
+            'Source, checksum and installed-game unlock requirements still apply.', wraplength=540,
+            style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(settings, text=OLD_PORTABLE_WARNING, wraplength=540, foreground='#ffba75').pack(anchor='w', pady=8)
         ttk.Label(settings, text='Custom SHA-256 (64 hexadecimal characters, supplied by the ZIP owner)').pack(anchor='w', pady=(12, 3))
         custom_sha = ttk.Entry(settings, textvariable=self.custom_portable_sha256)
@@ -170,8 +181,14 @@ class FlasherApp(tk.Tk):
         locate = ttk.Button(inputs, text='Locate installed game', command=self.locate)
         locate.pack(anchor='w', pady=(0, 10)); self.controls.append(locate)
         self.row(inputs, '3. CPE project folder (leave blank for bundled Rephysics)', self.project, lambda: self.pick_folder(self.project))
-        self.row(inputs, '4. Complete game source (blank: use source inside portable ZIP)', self.source, lambda: self.pick_folder(self.source))
-        self.row(inputs, '5. Python 3.12 with Pygame, Pymunk and PyInstaller installed', self.python, self.pick_python)
+        self.row(inputs, '4. Complete game source (blank: embedded ZIP source first)', self.source, lambda: self.pick_folder(self.source))
+        use_source = ttk.Button(inputs, text='Use bundled rebuild source', command=self.use_bundled_source)
+        use_source.pack(anchor='w', pady=(0, 6)); self.controls.append(use_source)
+        ttk.Label(inputs, text='Official 6.4.1, 6.4.2 and 6.4.3-nightly.2 use matching rebuild profiles. '
+            'For 6.4.3 stable, select its matching release source when available. Custom code/files mode '
+            'requires its matching source and never falls back automatically.', wraplength=540,
+            style='Muted.TLabel').pack(anchor='w', pady=(0, 8))
+        self.row(inputs, '5. Game compiler (6.4.2 / Christmas: Python 3.15.2 + pygame-ce)', self.python, self.pick_python)
         for text, action in (('Choose Python installation / venv folder…', self.pick_python_folder), ('Detect and check Python', self.detect_python)):
             button = ttk.Button(inputs, text=text, command=action)
             button.pack(anchor='w', pady=(0, 6)); self.controls.append(button)
@@ -216,6 +233,7 @@ class FlasherApp(tk.Tk):
                          self.custom_portable, self.custom_portable_sha256, self.custom_executable_name, self.target_executable_name,
                          self.allow_custom_files, self.remove_old_portable_restrictions):
             variable.trace_add('write', self.invalidate_plan)
+        self.source.trace_add('write', self.source_edited)
         if show_warning: self.after_idle(self.startup_warning)
 
     def scroll_page(self, notebook, title):
@@ -259,7 +277,12 @@ class FlasherApp(tk.Tk):
             self.custom_portable.set(False)
 
     def confirm_custom_files(self):
-        if not self.allow_custom_files.get(): return
+        if not self.allow_custom_files.get():
+            if (getattr(self, '_source_cleared_for_custom_files', False) and not self.source.get().strip()
+                    and self.bundled_source):
+                self.source.set(self.bundled_source)
+            self._source_cleared_for_custom_files = False
+            return
         if not self.custom_portable.get():
             self.allow_custom_files.set(False)
             messagebox.showwarning('Custom portable ZIP required', 'Enable Custom portable ZIP first, then choose whether to allow its custom code, menus and files.')
@@ -272,6 +295,21 @@ class FlasherApp(tk.Tk):
         self.full_rewrite.set(True)
         if self.bundled_source and self.source.get() == self.bundled_source:
             self.source.set('')
+            self._source_cleared_for_custom_files = True
+
+    def source_edited(self, *args):
+        # A manual source edit must not later be replaced by toggling custom mode.
+        self._source_cleared_for_custom_files = False
+
+    def use_bundled_source(self):
+        if not self.bundled_source:
+            messagebox.showwarning('Bundled source unavailable', 'Select complete matching game source on tab 01.'); return
+        if self.allow_custom_files.get() and not messagebox.askyesno('Use base source instead of custom source?',
+                'Bundled source does not contain your custom menus or historical game code. '
+                'Use this base source only if that replacement is intentional. Continue?', default='no', icon='warning'):
+            return
+        self.source.set(self.bundled_source)
+        self._source_cleared_for_custom_files = False
 
     def confirm_old_portable(self):
         if not self.remove_old_portable_restrictions.get(): return
@@ -344,7 +382,7 @@ class FlasherApp(tk.Tk):
             for candidate in discover_python(preferred):
                 try: return ('python', check_python(candidate))
                 except ValueError as exc: errors.append(str(exc))
-            raise ValueError(errors[0] if errors else 'No standalone Python found. Install Python 3.12 and choose its folder; Codex Python is excluded.')
+            raise ValueError(errors[0] if errors else 'Select a Python environment matching your game release; Codex Python is excluded.')
         self.status.set('Checking installed Python compilers…')
         self.start(detect)
 
@@ -387,7 +425,10 @@ class FlasherApp(tk.Tk):
             if not self.custom_portable.get() or not self.full_rewrite.get():
                 messagebox.showwarning('Old ZIP requirements', 'Old ZIP import requires Custom portable ZIP and Full rewrite.'); return
             if not messagebox.askyesno('WARNING — use old portable ZIP?', OLD_PORTABLE_WARNING+'\n\nContinue with this experimental import?', default='no', icon='warning'): return
-        if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source and project. Continue only if you trust those files?'): return
+        source_notice = ('\n\nBlank source uses embedded ZIP source first, then bundled current rebuild source if missing. '
+                         'It does not reconstruct an older game version.'
+                         if not self.source.get().strip() and self.bundled_source and not self.allow_custom_files.get() else '')
+        if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source and project. Continue only if you trust those files?'+source_notice): return
         if self.allow_unlocked_updates.get() and not self.custom_portable.get() and not messagebox.askyesno('Enable unlocked game updates?', 'This mod lets the existing in-game updater run while CPELoader is unlocked. Updating may overwrite mods or break compatibility. Integrity warnings remain on. Keep backups. Enable this override?'): return
         archive, target, python = (Path(value.get()) for value in (self.archive, self.target, self.python))
         source = Path(self.source.get()) if self.source.get().strip() else None
@@ -411,7 +452,9 @@ class FlasherApp(tk.Tk):
         workspace = local/'CPEFlasherTool'/'staging'/uuid.uuid4().hex
         self.plan = None
         self.status.set('Flashing and compiling in staging. The installed game is untouched.')
-        self.start(lambda: ('prepared', prepare_flash(archive, target, workspace, source, project, python, self.log, options=options)))
+        bundled = Path(self.bundled_source) if self.bundled_source else None
+        self.start(lambda: ('prepared', prepare_flash(archive, target, workspace, source, project, python, self.log,
+                                                      options=options, bundled_source=bundled)))
 
     def install(self):
         if self.plan is None: return
@@ -474,6 +517,10 @@ class FlasherApp(tk.Tk):
                     self.install_button.configure(state='normal' if self.plan is not None else 'disabled')
         except queue.Empty: pass
         self.after(100, self.drain)
+
+    def tick_christmas(self):
+        self.christmas_clock.set(countdown())
+        self.after(1000,self.tick_christmas)
 
     def close(self):
         if self.busy:

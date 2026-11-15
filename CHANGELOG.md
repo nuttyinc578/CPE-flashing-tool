@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.5
+
+- Detect free 6.4.1, 6.4.2 and Christmas 6.4.3-nightly.2 portable games, select matching rebuild source, and keep the original EXE version, CPELoader and repair helper. Prepare for stable 6.4.3 with matching release source; never substitute nightly for stable.
+- Live countdown to December 2, 2026 (midnight Toronto). The countdown does not publish a release or start a flash.
+
+- Fix the misleading "Older portable ZIP" error when only rebuild source is missing, independently of the compatibility setting.
+- Find the staged development bundle, offer **Use bundled rebuild source**, restore automatically cleared source when custom files are switched off, and use a visible bundled-source fallback when no embedded source exists and custom files are off. Custom source is not silently replaced.
+- Clarify checkbox semantics: checked disables old input ZIP checks; unchecked keeps strict checks. Source, checksum and target-unlock requirements remain active.
+
 ## 1.2.3
 
 - Optional **Remove old portable ZIP restrictions** allows experimental import of input ZIPs without today's loader sidecars/integrity format. It keeps the current target's original baseline, uses compatible modern rebuild source, and retains unlock, hash, archive-safety, warning and backup requirements.

@@ -18,8 +18,9 @@ from typing import Callable
 from cpeloader import CPELoader, COMPONENTS, MUTABLE, EXCLUDED_DIRS, write_json
 from .nuttyroot import NuttyRootInputs, stage_nuttyroot
 from .python_discovery import check_python
+from .releases import HALLOWEEN, NIGHTLY, OFFICIAL_NAMES, SUPPORTED, exe_version, source_version
 
-EXE = 'The Cube Beta Halloween Update.exe'
+EXE = HALLOWEEN
 Log = Callable[[str], None]
 
 
@@ -98,10 +99,14 @@ def executable_name(name: str) -> str:
 
 
 def select_executable(folder: Path, *, custom: bool = False, preferred: str = '') -> str:
+    if (folder/'Cube Beta PLUS.exe').is_file():
+        raise FlasherError('This flasher targets the free game, not Cube Beta PLUS.')
     wanted = executable_name(preferred) if custom and preferred else EXE
     candidates = [path for path in folder.iterdir() if path.is_file() and not path.is_symlink()
                   and path.suffix.lower() == '.exe' and not path.name.lower().startswith('unins')]
-    matches = [path for path in candidates if path.name.casefold() == wanted.casefold()]
+    matches = [path for path in candidates if path.name.casefold() in
+               ({wanted.casefold()} if custom and preferred else OFFICIAL_NAMES)]
+    if len(matches)>1: raise FlasherError('Multiple game executables. Select a folder with exactly one official game.')
     if len(matches) == 1: return executable_name(matches[0].name)
     if not custom or preferred:
         raise FlasherError(f'Game folder does not contain the selected game executable: {wanted}')
@@ -195,7 +200,7 @@ def find_old_portable(root: Path, preferred: str = '') -> Path:
     executables = [path for path in root.rglob('*') if path.is_file() and path.suffix.lower() == '.exe'
                    and not path.name.lower().startswith('unins')]
     wanted = executable_name(preferred) if preferred else EXE
-    matches = [path for path in executables if path.name.casefold() == wanted.casefold()]
+    matches = [path for path in executables if path.name.casefold() in ({wanted.casefold()} if preferred else OFFICIAL_NAMES)]
     if not preferred and not matches and len(executables) == 1: matches = executables
     if len(matches) != 1:
         raise FlasherError('Cannot identify the old portable game EXE. Enter its exact filename on tab 06 Settings; '
@@ -220,7 +225,8 @@ def find_portable(root: Path, *, custom: bool = False, preferred: str = '', remo
     if remove_old_restrictions:
         if not custom: raise FlasherError('Old ZIP import requires Custom portable ZIP enabled.')
         return find_old_portable(root, preferred)
-    candidates = [p.parent for p in root.rglob('cpeloader_manifest.json' if custom else EXE)]
+    candidates = ([p.parent for p in root.rglob('cpeloader_manifest.json')] if custom else
+                  [p.parent for p in root.rglob('*') if p.is_file() and p.name.casefold() in OFFICIAL_NAMES])
     if len(candidates) != 1: raise FlasherError('Choose a portable ZIP with exactly one game folder and integrity manifest.')
     game = candidates[0]
     if not all((game/name).is_file() for name in COMPONENTS):
@@ -237,6 +243,13 @@ def find_portable(root: Path, *, custom: bool = False, preferred: str = '', remo
             for name, value in baseline.items()):
         raise FlasherError('Portable ZIP has an invalid integrity manifest.')
     if legacy_helper not in baseline: changes = [name for name in changes if name != legacy_helper]
+    # 6.4.2+ ships one managed bytecode module that older CPELoader snapshots
+    # skip. Verify its exact bytes before accepting the old reader's discrepancy.
+    runtime_pyc = 'addons/nuttymod/nuttymod_runtime_v122.pyc'
+    if runtime_pyc in baseline and runtime_pyc in changes and (game/runtime_pyc).is_file():
+        with (game/runtime_pyc).open('rb') as stream:
+            if hashlib.file_digest(stream,'sha256').hexdigest()==baseline[runtime_pyc]:
+                changes.remove(runtime_pyc)
     if changes and not custom: raise FlasherError('Portable ZIP does not match its release integrity manifest. Use an original download.')
     select_executable(game, custom=custom, preferred=preferred)
     return game
@@ -252,10 +265,20 @@ def copy_tree(source: Path, destination: Path) -> None:
 
 
 def source_root(folder: Path) -> Path:
-    required = ('the_cube_beta_summer.py', 'cube_core.py', 'summer_build.spec', 'cpeloader.py', 'cpe/backend.py')
-    if not all((folder/name).is_file() for name in required):
+    required = ('the_cube_beta_summer.py', 'cube_core.py', 'cpeloader.py', 'cpe/backend.py')
+    if not all((folder/name).is_file() for name in required) or not any((folder/name).is_file() for name in ('summer_build.spec','nightly_build.spec')):
         raise FlasherError('Recompilation needs complete, matching game source. An EXE cannot be recompiled by itself.')
     return folder
+
+
+def bundled_source_path(runtime_root: Path | None = None) -> Path | None:
+    root = runtime_root or Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
+    for candidate in (root, root/'build'/'flasher-source'):
+        try: source_root(candidate)
+        except FlasherError: continue
+        if (candidate/'flashed_runtime.py').is_file() and all((candidate/name).is_file() for name in COMPONENTS):
+            return candidate.resolve()
+    return None
 
 
 def stage_custom_source(folder: Path, destination: Path) -> None:
@@ -298,10 +321,10 @@ def stage_source(folder: Path, destination: Path, *, custom_files: bool = False)
     destination.mkdir(parents=True, exist_ok=True)
     # Only game build inputs, never caches, credentials, local state or backups.
     for path in folder.iterdir():
-        if path.is_file() and (path.suffix.lower() in {'.py', '.rb', '.js', '.ico', '.png', '.spec', '.txt', '.cmd'} or path.name in {'cpe-backend.json', 'cpe-flash-profile.json', 'rootmode_manifest.json', 'fall_music.mp3', 'click.mp3'}):
+        if path.is_file() and (path.suffix.lower() in {'.py', '.rb', '.js', '.ico', '.png', '.spec', '.txt', '.cmd'} or path.name in {'nightly-config.json','cpe-backend.json', 'cpe-flash-profile.json', 'rootmode_manifest.json', 'fall_music.mp3', 'click.mp3'}):
             if path.name not in {'cpeloader_state.json', 'cpeloader_manifest.json'}:
                 shutil.copy2(path, destination/path.name)
-    for name in ('cpe', 'cpe_rephysics', 'cpe_project', 'addons', 'themes', 'repair_payload'):
+    for name in ('cpe', 'cpe_rephysics', 'cpe_project', 'cube_launcher', 'addons', 'themes', 'repair_payload'):
         if (folder/name).is_dir():
             for path in (folder/name).rglob('*'):
                 if path.is_file() and not any(part in {'__pycache__', 'bin', 'obj', 'out', 'tests', 'test', 'node_modules', 'update_backups'} for part in path.relative_to(folder).parts) and not path.name.startswith('.'):
@@ -366,7 +389,14 @@ def compile_game(build: Path, python: Path, log: Log) -> Path:
     log('Game compiler: '+str(python))
     run_checked([str(python), '-c', "import sys,pygame,pymunk,PyInstaller; assert sys.version_info >= (3,11), 'Python 3.11+ required'"], build, log)
     run_checked([str(python), '-c', "from cpe.backend import CubePhysicsEngine, physics_backend; e=CubePhysicsEngine(); e.execute_line('CPE/1 1 2 200 100 20 1 255 90 30'); e.step(1/60); assert e.snapshot()['engine']=='CPE'; assert hasattr(e,'register_body') and hasattr(physics_backend,'Body')"], build, log)
-    run_checked([str(python), '-m', 'PyInstaller', '--noconfirm', '--clean', 'summer_build.spec'], build, log)
+    modern = source_version(build) in SUPPORTED[1:] and (build/'nightly_build.spec').is_file()
+    spec = 'nightly_build.spec' if modern else 'summer_build.spec'
+    if modern:
+        run_checked([str(python),'-c',"import sys; assert sys.version_info[:3]==(3,15,2), 'Select the game Python 3.15.2 environment with pygame-ce, pymunk and PyInstaller installed'"],build,log)
+        if 'build/christmas-icon.ico' in (build/spec).read_text(encoding='utf-8'):
+            # Generate only in the disposable build folder, as the Christmas release does.
+            run_checked([str(python),'-c', "import io,struct,pygame;from pathlib import Path;from christmas_update import christmas_icon; b=io.BytesIO();pygame.image.save(christmas_icon(),b,'icon.png');d=b.getvalue();p=Path('build/christmas-icon.ico');p.parent.mkdir(exist_ok=True);p.write_bytes(struct.pack('<HHHBBBBHHII',0,1,1,64,64,0,0,1,32,len(d),22)+d)"],build,log)
+    run_checked([str(python), '-m', 'PyInstaller', '--noconfirm', '--clean', spec], build, log)
     output = build/'dist'/select_executable(build/'dist', custom=True)
     if not output.is_file() or output.stat().st_size < 1024: raise FlasherError('Compiler did not produce a game executable.')
     return output
@@ -394,7 +424,8 @@ class PreparedFlash:
 
 
 def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | None, project: Path | None,
-                  python: Path, log: Log = print, compiler=compile_game, options: FlashOptions | None = None) -> PreparedFlash:
+                  python: Path, log: Log = print, compiler=compile_game, options: FlashOptions | None = None,
+                  bundled_source: Path | None = None) -> PreparedFlash:
     target = target.resolve()
     target_exe = select_executable(target, custom=bool(options and options.custom_portable),
                                    preferred=options.target_executable_name if options else '')
@@ -430,6 +461,29 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
         # Preserve a real existing baseline, not a new seal for unverified old files.
         shutil.copy2(target/'cpeloader_manifest.json', portable/'cpeloader_manifest.json')
     portable_exe = select_executable(portable, custom=options.custom_portable, preferred=options.custom_executable_name)
+    version = '' if options.custom_portable else exe_version(portable/portable_exe)
+    if not options.custom_portable and portable_exe.casefold()!=HALLOWEEN.casefold() and version not in SUPPORTED:
+        raise FlasherError('Unknown Christmas/nightly game version. Select a supported original portable.')
+    runtime_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
+    if version in SUPPORTED:
+        installed_version = exe_version(target/target_exe)
+        if installed_version != version:
+            raise FlasherError(f'ZIP is {version}, but target is {installed_version or "unidentified"}. Select a matching installation.')
+        # Default source in the GUI is the old Halloween bundle, not an explicit override.
+        default = bundled_source_path(runtime_root)
+        if source is None or (default and Path(source).resolve()==default):
+            source = None
+            bundled_source = None
+            if not (portable/'game-source.zip').is_file():
+                for parent in (runtime_root/'game-versions',runtime_root/'build/game-versions'):
+                    package=parent/(version+'.zip')
+                    if package.is_file():
+                        source=workspace/'matching-source'
+                        safe_extract(package,source)
+                        break
+                if source is None:
+                    raise FlasherError(f'Select complete matching {version} game source on tab 01. A stable release cannot use nightly or older bundled source.')
+        log(f'Official game profile: {version} / {portable_exe}')
     build = workspace/'game-build'
     if source is not None: stage_source(source, build, custom_files=options.allow_custom_files)
     elif (portable/'game-source.zip').is_file():
@@ -440,15 +494,26 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
         else:
             safe_extract(portable/'game-source.zip', build)
             source_root(build)
-    else: raise FlasherError('Older portable ZIP: select matching game source for recompilation.')
+    elif bundled_source is not None and not options.allow_custom_files:
+        log('ZIP has no game-source.zip; using bundled current rebuild source, not reconstructing an older version.')
+        stage_source(bundled_source, build)
+    else:
+        detail = (' Custom code/menus are enabled, so bundled source is not substituted for your custom game.'
+                  if options.allow_custom_files else ' Use the bundled rebuild source button on tab 01 if appropriate.')
+        raise FlasherError('Rebuild source missing: this ZIP has no game-source.zip. Select complete matching game source '
+                           'on tab 01. Source is still required when old ZIP restrictions are disabled.'+detail+
+                           ' An EXE cannot be recompiled by itself.')
     if options.remove_old_portable_restrictions and not all((build/name).is_file() for name in COMPONENTS):
         raise FlasherError('Old ZIP import needs compatible complete rebuild source with all current CPELoader components.')
     # Update our owned loader policy inside both the compiled game and sidecars.
-    runtime_root = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parents[1]))
-    shutil.copy2(runtime_root/'cpeloader.py', build/'cpeloader.py')
-    for name in ('cpeloader_ui.py', 'halloween_update.py', 'custom_cube_loading.py'):
-        if (runtime_root/'game_overrides'/name).is_file():
-            shutil.copy2(runtime_root/'game_overrides'/name, build/name)
+    if version in SUPPORTED and source_version(build)!=version:
+        raise FlasherError(f'Rebuild source does not match {version}. Choose matching source on tab 01.')
+    if version not in SUPPORTED[1:]:
+        shutil.copy2(runtime_root/'cpeloader.py', build/'cpeloader.py')
+        for name in ('cpeloader_ui.py', 'halloween_update.py', 'custom_cube_loading.py'):
+            if version=='6.4.1' and name=='halloween_update.py':continue
+            if (runtime_root/'game_overrides'/name).is_file():
+                shutil.copy2(runtime_root/'game_overrides'/name, build/name)
     label = apply_project(project, build, portable)
     apply_options(options, build, portable)
     if options.custom_cube_tar:
@@ -462,6 +527,8 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
     if options.remove_old_portable_restrictions: label += ' / EXPERIMENTAL old ZIP import'
     log(f'Rebuilding the whole game for {label}. Target files remain untouched…')
     executable = compiler(build, python, log)
+    if version in SUPPORTED and exe_version(executable)!=version:
+        raise FlasherError(f'Rebuilt executable is not {version}; target was not changed.')
     # Replace source sidecars too, not only the compiled executable.
     if options.full_rewrite:
         for old in list(portable.rglob('*')):
@@ -647,7 +714,9 @@ def restore_backup(target: Path, backup: Path, log: Log = print) -> Path:
 def locate_games(*, custom: bool = False, preferred: str = '') -> list[Path]:
     candidates = []
     local = os.environ.get('LOCALAPPDATA')
-    if local: candidates.append(Path(local)/'Programs'/'The Cube Beta Halloween Update')
+    if local:
+        programs=Path(local)/'Programs'
+        if programs.is_dir(): candidates.extend(sorted(programs.glob('The Cube Beta*')))
     if getattr(sys, 'frozen', False): candidates.append(Path(sys.executable).resolve().parent)
     found = []
     for path in candidates:

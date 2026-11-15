@@ -12,6 +12,7 @@ from cpe_flasher.core import safe_extract, source_root
 parser = argparse.ArgumentParser()
 parser.add_argument('--game-source', type=Path, required=True)
 parser.add_argument('--sha256', required=True)
+parser.add_argument('--game-repository',type=Path,required=True,help='Free the-cube repository containing the pinned release commits')
 parser.add_argument('--distpath', default='dist', help='Separate output folder if an existing app is open')
 args = parser.parse_args()
 with args.game_source.open('rb') as stream:
@@ -29,4 +30,5 @@ shutil.copy2(root/'cpeloader.py', stage/'cpeloader.py')
 for name in ('cpeloader_ui.py', 'halloween_update.py', 'custom_cube_loading.py'):
     shutil.copy2(root/'game_overrides'/name, stage/name)
 subprocess.run([sys.executable, str(root/'tools'/'Build-CustomCube.py')], cwd=root, check=True)
+subprocess.run([sys.executable,str(root/'tools'/'Build-GameProfiles.py'),'--repository',str(args.game_repository.resolve())],cwd=root,check=True)
 subprocess.run([sys.executable, '-m', 'PyInstaller', '--noconfirm', '--distpath', args.distpath, 'cpe_flasher_build.spec'], cwd=root, check=True)

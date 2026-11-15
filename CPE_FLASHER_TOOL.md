@@ -2,6 +2,23 @@
 
 ## Settings — custom portable ZIP
 
+### Rebuild source and the older-ZIP error
+
+Missing rebuild source is not an input-age restriction. The flasher reports
+**Rebuild source missing** when it cannot rebuild, rather than calling a modern
+ZIP an older portable. On tab 06, checked **Remove old portable ZIP restrictions**
+means those input checks are disabled; unchecked means normal strict checks
+remain enabled. Neither state makes an EXE recompilable without source.
+
+Use **Use bundled rebuild source** on tab 01 to restore the base source choice.
+Blank source prefers an embedded `game-source.zip`; if none exists and custom
+code/files mode is off, the desktop app can use its bundled current source.
+This rebuilds the base game, not a historical version. Explicit source choices
+and invalid embedded source are never silently replaced by that fallback.
+Custom code/files mode still requires matching source and never automatically
+substitutes the bundle. Switching it off restores a source field that the app
+automatically cleared, but preserves deliberate source edits.
+
 ### Remove old portable ZIP restrictions
 
 The tab 06 option **Remove old portable ZIP restrictions** is off by default.

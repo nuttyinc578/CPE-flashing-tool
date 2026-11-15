@@ -13,10 +13,13 @@ if __name__ == '__main__':
         app.update_idletasks()
         source_root(Path(app.source.get()))
         Path(sys.argv[2]).write_text(json.dumps({'version': __version__, 'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls),
+                                               'christmas_countdown':app.christmas_clock.get(),
+                                               'game_profiles':sorted(p.stem for p in (Path(getattr(sys,'_MEIPASS','.'))/'game-versions').glob('*.zip')),
                                                'tabs': len(app.notebook.tabs()), 'update_override_default': app.allow_unlocked_updates.get(),
                                                'custom_portable_default': app.custom_portable.get(),
                                                'custom_files_default': app.allow_custom_files.get(),
                                                'old_portable_restrictions_removed_default': app.remove_old_portable_restrictions.get(),
+                                               'source_selection_fix': callable(getattr(app, 'use_bundled_source', None)),
                                                'custom_sha_empty': not app.custom_portable_sha256.get(),
                                                'custom_exe_names_empty': not app.custom_executable_name.get() and not app.target_executable_name.get(),
                                                'python_discovery_patch': (Path(getattr(sys, '_MEIPASS', '.'))/'flashing.patch').is_file(),

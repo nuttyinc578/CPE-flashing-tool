@@ -7,15 +7,19 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
 parser.add_argument('--app', type=Path, default=root/'dist'/'CPE Flasher Tool.exe')
-parser.add_argument('--version', default='1.2.3')
+parser.add_argument('--version', default='1.2.5')
+parser.add_argument('--output-dir', type=Path, default=root/'release-download')
 args=parser.parse_args()
 if not args.version or any(c not in '0123456789.' for c in args.version):
     raise SystemExit('Use a numeric dotted release version.')
-output=root/'release-download'; output.mkdir(exist_ok=True)
+base=root/'release-download'
+output=args.output_dir.resolve(); output.mkdir(parents=True,exist_ok=True)
 app=output/f'CPE-Flasher-Tool-{args.version}-Windows.exe'
 shutil.copy2(args.app, app)
-files=[app, output/'NuttyMod-Root-1.0.0-Packages.zip', output/'Cube-Beta-Rebuild-Source-1.0.0.zip']
-files += [output/'Custom-Cube-Beta-Ortain.tar', output/'CPE-Series-2-Ortain.zip']
+files=[app]
+for name in ('NuttyMod-Root-1.0.0-Packages.zip','Cube-Beta-Rebuild-Source-1.0.0.zip','Custom-Cube-Beta-Ortain.tar','CPE-Series-2-Ortain.zip'):
+    if output!=base:shutil.copy2(base/name,output/name)
+    files.append(output/name)
 lines=[]
 for path in files:
     with path.open('rb') as stream: checksum=hashlib.file_digest(stream,'sha256').hexdigest()
