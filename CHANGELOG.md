@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.7
+
+- Add matching rebuild profiles for free 6.4.2-nightly, 6.4.3-nightly and 6.4.3-nightly.3 alongside stable 6.4.1 and 6.4.2 and nightly.2.
+- Preserve the Nightly 3 DVD archive screenshots when rebuilding or packaging the game's source.
+
 ## 1.2.6
 
 - **05 Custom Cube** keeps six package paths. Pick exactly one TAR per flash or choose No overlay. Only paths are saved; no overlay is active on launch. Changing the selection invalidates a prepared flash.

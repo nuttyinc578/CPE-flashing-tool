@@ -9,7 +9,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from . import __version__
-from .releases import countdown
+from .releases import PROFILE_REVISIONS, countdown
 from .cube_slots import BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tar
 
 from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, bundled_source_path, CUSTOM_PORTABLE_WARNING, CUSTOM_FILES_WARNING, OLD_PORTABLE_WARNING
@@ -110,7 +110,9 @@ class FlasherApp(tk.Tk):
         notebook = ttk.Notebook(workspace); notebook.grid(row=0, column=0, sticky='nsew', padx=(0, 20))
         self.notebook = notebook
         inputs = self.scroll_page(notebook, '01 Game')
-        ttk.Label(inputs,text='Free editions: 6.4.1 · 6.4.2 · 6.4.3-nightly.2 · 6.4.3 (planned Dec 2). Match the ZIP and installed version.',
+        stable = ', '.join(version for version in PROFILE_REVISIONS if '-nightly' not in version)
+        nightlies = ', '.join(version for version in PROFILE_REVISIONS if '-nightly' in version)
+        ttk.Label(inputs,text=f'Free stable: {stable}\nFree nightly: {nightlies}',
                   wraplength=560,style='Muted.TLabel').pack(anchor='w',pady=4)
         options = self.scroll_page(notebook, '02 Userdata')
         nutty = self.scroll_page(notebook, '03 Root')
@@ -206,8 +208,8 @@ class FlasherApp(tk.Tk):
         self.row(inputs, '4. Complete game source (blank: embedded ZIP source first)', self.source, lambda: self.pick_folder(self.source))
         use_source = ttk.Button(inputs, text='Use bundled rebuild source', command=self.use_bundled_source)
         use_source.pack(anchor='w', pady=(0, 6)); self.controls.append(use_source)
-        ttk.Label(inputs, text='Official 6.4.1, 6.4.2 and 6.4.3-nightly.2 use matching rebuild profiles. '
-            'For 6.4.3 stable, select its matching release source when available. Custom code/files mode '
+        ttk.Label(inputs, text='Match the portable ZIP and installed version. Rebuild profiles never mix releases. '
+            'For future 6.4.3 stable, select its matching stable source once released. Custom code/files mode '
             'requires its matching source and never falls back automatically.', wraplength=540,
             style='Muted.TLabel').pack(anchor='w', pady=(0, 8))
         self.row(inputs, '5. Game compiler (6.4.2 / Christmas: Python 3.15.2 + pygame-ce)', self.python, self.pick_python)

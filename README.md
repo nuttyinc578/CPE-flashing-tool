@@ -11,7 +11,7 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 v1.2.6 adds six saved TAR slots to **05 Custom Cube**, with one active overlay per flash. See the [slot guide](CUSTOM_CUBE.md).
 
-v1.2.5 supports free 6.4.1, 6.4.2 and 6.4.3-nightly.2, with a countdown to the planned December 2 Christmas stable update. See [compatibility and build requirements](RELEASE_NOTES_1.2.5.md).
+v1.2.7 supports free stable **6.4.1** and **6.4.2**, plus **6.4.2-nightly**, **6.4.3-nightly**, **6.4.3-nightly.2**, and **6.4.3-nightly.3**. See [compatibility and build requirements](RELEASE_NOTES_1.2.7.md).
 
 v1.2.3 added **Allow custom code, menus and files** and experimental **Remove old
 portable ZIP restrictions** under tab 06. Both are off by default, require

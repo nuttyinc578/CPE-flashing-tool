@@ -18,7 +18,7 @@ from typing import Callable
 from cpeloader import CPELoader, COMPONENTS, MUTABLE, EXCLUDED_DIRS, write_json
 from .nuttyroot import NuttyRootInputs, stage_nuttyroot
 from .python_discovery import check_python
-from .releases import HALLOWEEN, NIGHTLY, OFFICIAL_NAMES, SUPPORTED, exe_version, source_version
+from .releases import HALLOWEEN, NIGHTLY, OFFICIAL_NAMES, MODERN_PROFILES, SUPPORTED, exe_version, source_version
 
 EXE = HALLOWEEN
 Log = Callable[[str], None]
@@ -324,10 +324,12 @@ def stage_source(folder: Path, destination: Path, *, custom_files: bool = False)
         if path.is_file() and (path.suffix.lower() in {'.py', '.rb', '.js', '.ico', '.png', '.spec', '.txt', '.cmd'} or path.name in {'nightly-config.json','cpe-backend.json', 'cpe-flash-profile.json', 'rootmode_manifest.json', 'fall_music.mp3', 'click.mp3'}):
             if path.name not in {'cpeloader_state.json', 'cpeloader_manifest.json'}:
                 shutil.copy2(path, destination/path.name)
-    for name in ('cpe', 'cpe_rephysics', 'cpe_project', 'cube_launcher', 'addons', 'themes', 'repair_payload'):
+    for name in ('cpe', 'cpe_rephysics', 'cpe_project', 'cube_launcher', 'addons', 'themes', 'repair_payload', 'archive_assets'):
         if (folder/name).is_dir():
             for path in (folder/name).rglob('*'):
                 if path.is_file() and not any(part in {'__pycache__', 'bin', 'obj', 'out', 'tests', 'test', 'node_modules', 'update_backups'} for part in path.relative_to(folder).parts) and not path.name.startswith('.'):
+                    if name == 'archive_assets' and path.suffix.lower() not in {'.png', '.md'}:
+                        continue
                     if path.is_symlink(): raise FlasherError('Game source contains a symbolic link.')
                     target = destination/path.relative_to(folder)
                     target.parent.mkdir(parents=True, exist_ok=True)
@@ -389,7 +391,7 @@ def compile_game(build: Path, python: Path, log: Log) -> Path:
     log('Game compiler: '+str(python))
     run_checked([str(python), '-c', "import sys,pygame,pymunk,PyInstaller; assert sys.version_info >= (3,11), 'Python 3.11+ required'"], build, log)
     run_checked([str(python), '-c', "from cpe.backend import CubePhysicsEngine, physics_backend; e=CubePhysicsEngine(); e.execute_line('CPE/1 1 2 200 100 20 1 255 90 30'); e.step(1/60); assert e.snapshot()['engine']=='CPE'; assert hasattr(e,'register_body') and hasattr(physics_backend,'Body')"], build, log)
-    modern = source_version(build) in SUPPORTED[1:] and (build/'nightly_build.spec').is_file()
+    modern = source_version(build) in MODERN_PROFILES and (build/'nightly_build.spec').is_file()
     spec = 'nightly_build.spec' if modern else 'summer_build.spec'
     if modern:
         run_checked([str(python),'-c',"import sys; assert sys.version_info[:3]==(3,15,2), 'Select the game Python 3.15.2 environment with pygame-ce, pymunk and PyInstaller installed'"],build,log)
@@ -482,7 +484,7 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
                         safe_extract(package,source)
                         break
                 if source is None:
-                    raise FlasherError(f'Select complete matching {version} game source on tab 01. A stable release cannot use nightly or older bundled source.')
+                    raise FlasherError(f'Select complete matching {version} game source on tab 01. No source from a different release can be substituted.')
         log(f'Official game profile: {version} / {portable_exe}')
     build = workspace/'game-build'
     if source is not None: stage_source(source, build, custom_files=options.allow_custom_files)
@@ -508,7 +510,7 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
     # Update our owned loader policy inside both the compiled game and sidecars.
     if version in SUPPORTED and source_version(build)!=version:
         raise FlasherError(f'Rebuild source does not match {version}. Choose matching source on tab 01.')
-    if version not in SUPPORTED[1:]:
+    if version not in MODERN_PROFILES:
         shutil.copy2(runtime_root/'cpeloader.py', build/'cpeloader.py')
         for name in ('cpeloader_ui.py', 'halloween_update.py', 'custom_cube_loading.py'):
             if version=='6.4.1' and name=='halloween_update.py':continue
