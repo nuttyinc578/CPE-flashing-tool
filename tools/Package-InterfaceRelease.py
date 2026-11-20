@@ -7,7 +7,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
 parser.add_argument('--app', type=Path, default=root/'dist'/'CPE Flasher Tool.exe')
-parser.add_argument('--version', default='1.2.5')
+parser.add_argument('--version', default='1.2.6')
 parser.add_argument('--output-dir', type=Path, default=root/'release-download')
 args=parser.parse_args()
 if not args.version or any(c not in '0123456789.' for c in args.version):

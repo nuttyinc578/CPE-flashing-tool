@@ -8,13 +8,23 @@ if __name__ == '__main__':
         from cpe_flasher.gui import FlasherApp
         from cpe_flasher import __version__
         from cpe_flasher.core import source_root
-        app = FlasherApp(show_warning=False)
+        import tempfile
+        temporary = tempfile.TemporaryDirectory()
+        app = FlasherApp(show_warning=False, slot_file=Path(temporary.name)/'slots.json')
         app.withdraw()
         app.update_idletasks()
         source_root(Path(app.source.get()))
+        initial_cube_slot = app.active_cube_slot.get()
+        app.plan = object()
+        app.active_cube_slot.set(len(app.cube_slots))
+        switching_cleared_plan = app.plan is None
+        app.active_cube_slot.set(initial_cube_slot)
         Path(sys.argv[2]).write_text(json.dumps({'version': __version__, 'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls),
                                                'christmas_countdown':app.christmas_clock.get(),
                                                'game_profiles':sorted(p.stem for p in (Path(getattr(sys,'_MEIPASS','.'))/'game-versions').glob('*.zip')),
+                                               'custom_cube_slots': len(app.cube_slots),
+                                               'custom_cube_active_default': initial_cube_slot,
+                                               'custom_cube_switch_invalidates_plan': switching_cleared_plan,
                                                'tabs': len(app.notebook.tabs()), 'update_override_default': app.allow_unlocked_updates.get(),
                                                'custom_portable_default': app.custom_portable.get(),
                                                'custom_files_default': app.allow_custom_files.get(),
@@ -27,4 +37,5 @@ if __name__ == '__main__':
                                                'custom_cube_bundle': (Path(getattr(sys, '_MEIPASS', '.'))/'Custom-Cube-Beta-Ortain.tar').is_file()
                                                and (Path(getattr(sys, '_MEIPASS', '.'))/'projects'/'cpe-series-2-ortain'/'cpe-project.json').is_file()}), encoding='utf-8')
         app.destroy()
+        temporary.cleanup()
     else: main()

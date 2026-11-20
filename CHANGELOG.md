@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.6
+
+- **05 Custom Cube** keeps six package paths. Pick exactly one TAR per flash or choose No overlay. Only paths are saved; no overlay is active on launch. Changing the selection invalidates a prepared flash.
+
 ## 1.2.5
 
 - Detect free 6.4.1, 6.4.2 and Christmas 6.4.3-nightly.2 portable games, select matching rebuild source, and keep the original EXE version, CPELoader and repair helper. Prepare for stable 6.4.3 with matching release source; never substitute nightly for stable.

@@ -9,6 +9,8 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
+v1.2.6 adds six saved TAR slots to **05 Custom Cube**, with one active overlay per flash. See the [slot guide](CUSTOM_CUBE.md).
+
 v1.2.5 supports free 6.4.1, 6.4.2 and 6.4.3-nightly.2, with a countdown to the planned December 2 Christmas stable update. See [compatibility and build requirements](RELEASE_NOTES_1.2.5.md).
 
 v1.2.3 added **Allow custom code, menus and files** and experimental **Remove old
