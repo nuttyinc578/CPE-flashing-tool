@@ -3,7 +3,6 @@ import hashlib
 import json
 import unittest
 import zipfile
-from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -148,8 +147,7 @@ class CustomFilesGuiTests(unittest.TestCase):
         app.trust = Variable(True); app.archive = Variable('custom.zip'); app.target = Variable('installed')
         app.python = Variable('python.exe'); app.userdata = Variable('userdata')
         app.custom_portable_sha256 = Variable('a'*64); app.start = Mock()
-        app.active_cube_slot = Variable(0); app.cube_slot_paths = lambda: ('',) * 6
-        app.ortain_tar = Path('bundled-ortain.tar')
+        app.selected_cube_overlays = lambda: ()
         with patch('cpe_flasher.gui.messagebox.askyesno', side_effect=[True, False]) as confirm:
             FlasherApp.prepare(app)
         self.assertEqual(confirm.call_count, 2)

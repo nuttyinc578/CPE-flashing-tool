@@ -14,16 +14,23 @@ if __name__ == '__main__':
         app.withdraw()
         app.update_idletasks()
         source_root(Path(app.source.get()))
-        initial_cube_slot = app.active_cube_slot.get()
+        initial_cube_slots = sum(check.get() for check in app.cube_slot_checks)
+        app.cube_slots[0].set('first-test.tar')
+        app.cube_slots[-1].set('last-test.tar')
+        app.cube_slot_buttons[-1].invoke()
         app.plan = object()
-        app.active_cube_slot.set(len(app.cube_slots))
+        app.cube_slot_buttons[0].invoke()
         switching_cleared_plan = app.plan is None
-        app.active_cube_slot.set(initial_cube_slot)
+        multiple_cube_slots = [slot for slot, _ in app.selected_cube_overlays()]
+        app.uncheck_cube_slots()
+        uncheck_cleared_selection = not app.selected_cube_overlays()
         Path(sys.argv[2]).write_text(json.dumps({'version': __version__, 'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls),
                                                'christmas_countdown':app.christmas_clock.get(),
                                                'game_profiles':sorted(p.stem for p in (Path(getattr(sys,'_MEIPASS','.'))/'game-versions').glob('*.zip')),
                                                'custom_cube_slots': len(app.cube_slots),
-                                               'custom_cube_active_default': initial_cube_slot,
+                                               'custom_cube_active_default': initial_cube_slots,
+                                               'custom_cube_multiple': multiple_cube_slots,
+                                               'custom_cube_uncheck_all': uncheck_cleared_selection,
                                                'custom_cube_switch_invalidates_plan': switching_cleared_plan,
                                                'tabs': len(app.notebook.tabs()), 'update_override_default': app.allow_unlocked_updates.get(),
                                                'custom_portable_default': app.custom_portable.get(),

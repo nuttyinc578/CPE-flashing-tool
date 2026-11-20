@@ -14,7 +14,7 @@ import test_cpe_flasher as fixtures
 
 class Profiles(unittest.TestCase):
     def test_schedule(self):
-        self.assertEqual(__version__,'1.2.7')
+        self.assertEqual(__version__,'1.2.8')
         self.assertIn('1d 00:00:01',countdown(CHRISTMAS_DATE-timedelta(days=1,seconds=1)))
         self.assertIn('0d 00:00:01',countdown(CHRISTMAS_DATE-timedelta(microseconds=1)))
         for d in (0,30):

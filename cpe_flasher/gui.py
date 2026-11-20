@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from . import __version__
 from .releases import PROFILE_REVISIONS, countdown
-from .cube_slots import BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tar
+from .cube_slots import BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tars
 
 from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, bundled_source_path, CUSTOM_PORTABLE_WARNING, CUSTOM_FILES_WARNING, OLD_PORTABLE_WARNING
 from cpeloader import write_json
@@ -75,7 +75,8 @@ class FlasherApp(tk.Tk):
         self.cube_slot_file = slot_file if slot_file is not None else local/'CPEFlasherTool'/'custom-cube-slots.json'
         self.saved_cube_slots = load_slots(self.cube_slot_file)
         self.cube_slots = [tk.StringVar(value=path) for path in self.saved_cube_slots]
-        self.active_cube_slot = tk.IntVar(value=0)
+        self.cube_slot_checks = [tk.BooleanVar(value=False) for _ in self.cube_slots]
+        self.cube_slot_buttons = []
         self.ortain_tar = root/'Custom-Cube-Beta-Ortain.tar'
         self.custom_portable = tk.BooleanVar(value=False)
         self.allow_custom_files = tk.BooleanVar(value=False)
@@ -155,22 +156,22 @@ class FlasherApp(tk.Tk):
         ttk.Label(settings, text='Off by default each time you open the flasher. Confirmation is required before every custom build.',
             wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(custom, text=f'CUSTOM CUBE BETA  /  {SLOT_COUNT} PACKAGE SLOTS', style='Section.TLabel').pack(anchor='w', pady=8)
-        ttk.Label(custom, text='Keep up to six trusted .tar packages. Select one slot per flash. Paths are saved on exit; each launch starts with No overlay.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=(0, 7))
-        no_overlay = ttk.Radiobutton(custom, text='No overlay', variable=self.active_cube_slot, value=0)
-        no_overlay.pack(anchor='w')
-        self.controls.append(no_overlay)
-        for slot, variable in enumerate(self.cube_slots, 1):
+        ttk.Label(custom, text='Check any slots to flash together in slot order. Packages that target the same file cannot be combined. Paths are saved; all slots start unchecked.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=(0, 7))
+        for slot, (variable, checked) in enumerate(zip(self.cube_slots, self.cube_slot_checks), 1):
             line = ttk.Frame(custom)
             line.pack(fill='x', pady=3)
-            radio = ttk.Radiobutton(line, text=f'Slot {slot}', variable=self.active_cube_slot, value=slot)
-            radio.pack(side='left')
+            checkbox = ttk.Checkbutton(line, text=f'Slot {slot}', variable=checked)
+            checkbox.pack(side='left')
             entry = ttk.Entry(line, textvariable=variable, width=15)
             entry.pack(side='left', fill='x', expand=True, padx=(0, 5))
             browse = ttk.Button(line, text='Browse…', command=lambda n=slot: self.pick_cube_slot(n))
             clear = ttk.Button(line, text='Clear', command=lambda n=slot: self.clear_cube_slot(n))
             browse.pack(side='left', padx=(0, 5))
             clear.pack(side='left')
-            self.controls.extend((radio, entry, browse, clear))
+            self.cube_slot_buttons.append(checkbox)
+            self.controls.extend((checkbox, entry, browse, clear))
+        uncheck = ttk.Button(custom, text='Uncheck all', command=self.uncheck_cube_slots)
+        uncheck.pack(anchor='w', pady=(4, 0)); self.controls.append(uncheck)
         ttk.Label(custom, text='Only compile trusted packages: TAR files can contain executable Python. Userdata, Full rewrite, loader unlock, and backup checks still apply.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         for title, callback in (('Use bundled Custom Ortain TAR', self.use_ortain_slot),
                                 ('Use CPE Series 2 — Ortain project', lambda: self.project.set(str(root/'projects'/'cpe-series-2-ortain')))):
@@ -254,7 +255,7 @@ class FlasherApp(tk.Tk):
         for variable in (self.archive, self.target, self.project, self.source, self.python,
                          self.userdata, self.loader, self.verbose, self.safety_alerts, self.full_rewrite,
                          self.nuttyroot, self.nutty_zip, self.nutty_cp, self.nutty_verify, self.official_sha, self.rootmode_tar, self.allow_unlocked_updates,
-                         self.active_cube_slot, *self.cube_slots,
+                         *self.cube_slot_checks, *self.cube_slots,
                          self.custom_portable, self.custom_portable_sha256, self.custom_executable_name, self.target_executable_name,
                          self.allow_custom_files, self.remove_old_portable_restrictions):
             variable.trace_add('write', self.invalidate_plan)
@@ -418,32 +419,34 @@ class FlasherApp(tk.Tk):
     def cube_slot_paths(self):
         return tuple(variable.get() for variable in self.cube_slots)
 
+    def selected_cube_overlays(self):
+        return selected_tars(self.cube_slot_paths(), tuple(check.get() for check in self.cube_slot_checks), self.ortain_tar)
+
+    def uncheck_cube_slots(self):
+        for check in self.cube_slot_checks:
+            check.set(False)
+
     def pick_cube_slot(self, slot):
         selected = filedialog.askopenfilename(title=f'Choose a Custom Cube TAR for slot {slot}',
                                               filetypes=[('Custom Cube TAR', '*.tar')])
         if selected:
             self.cube_slots[slot-1].set(selected)
-            self.active_cube_slot.set(slot)
+            self.cube_slot_checks[slot-1].set(True)
 
     def clear_cube_slot(self, slot):
         self.cube_slots[slot-1].set('')
-        if self.active_cube_slot.get() == slot:
-            self.active_cube_slot.set(0)
+        self.cube_slot_checks[slot-1].set(False)
 
     def use_ortain_slot(self):
         paths = self.cube_slot_paths()
-        slot = self.active_cube_slot.get()
+        slot = next((i for i, path in enumerate(paths, 1) if path.strip() == BUNDLED_ORTAIN), 0)
         if not slot:
             slot = next((i for i, path in enumerate(paths, 1) if not path.strip()), 0)
         if not slot:
-            messagebox.showinfo('All six slots are in use', 'Select the slot to replace, or clear a slot first.')
-            return
-        if paths[slot-1] not in ('', BUNDLED_ORTAIN) and not messagebox.askyesno(
-                'Replace slot path?', f'Put the bundled Ortain TAR in slot {slot}? The existing TAR file on disk will not be changed.',
-                default='no'):
+            messagebox.showinfo('All six slots are in use', 'Clear a slot before adding the bundled Ortain TAR.')
             return
         self.cube_slots[slot-1].set(BUNDLED_ORTAIN)
-        self.active_cube_slot.set(slot)
+        self.cube_slot_checks[slot-1].set(True)
 
     def locate(self, silent=False):
         found = locate_games(custom=self.custom_portable.get(), preferred=self.target_executable_name.get())
@@ -468,8 +471,7 @@ class FlasherApp(tk.Tk):
         if not all(value.get().strip() for value in (self.archive, self.target, self.python, self.userdata)):
             messagebox.showwarning('Missing input', 'Select a portable ZIP, target game folder, Python interpreter and required userdata folder.'); return
         try:
-            slot = self.active_cube_slot.get()
-            overlay = selected_tar(self.cube_slot_paths(), slot, self.ortain_tar)
+            overlays = self.selected_cube_overlays()
         except ValueError as exc:
             messagebox.showwarning('Custom Cube slot', str(exc)); return
         if self.custom_portable.get():
@@ -488,8 +490,9 @@ class FlasherApp(tk.Tk):
         source_notice = ('\n\nBlank source uses embedded ZIP source first, then bundled current rebuild source if missing. '
                          'It does not reconstruct an older game version.'
                          if not self.source.get().strip() and self.bundled_source and not self.allow_custom_files.get() else '')
-        overlay_notice = f'\n\nCustom Cube slot {slot}: {overlay}' if overlay is not None else '\n\nCustom Cube: No overlay'
-        if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source, project and overlay. Continue only if you trust those files?'+overlay_notice+source_notice, default='no'): return
+        overlay_notice = ('\n\nCustom Cube packages (in order):\n' + '\n'.join(f'Slot {slot}: {path}' for slot, path in overlays)
+                          if overlays else '\n\nCustom Cube: No overlays')
+        if not messagebox.askyesno('Build trusted code?', 'The compiler can execute Python from the selected source, project and packages. Continue only if you trust those files?'+overlay_notice+source_notice, default='no'): return
         if self.allow_unlocked_updates.get() and not self.custom_portable.get() and not messagebox.askyesno('Enable unlocked game updates?', 'This mod lets the existing in-game updater run while CPELoader is unlocked. Updating may overwrite mods or break compatibility. Integrity warnings remain on. Keep backups. Enable this override?'): return
         archive, target, python = (Path(value.get()) for value in (self.archive, self.target, self.python))
         source = Path(self.source.get()) if self.source.get().strip() else None
@@ -497,7 +500,7 @@ class FlasherApp(tk.Tk):
         options = FlashOptions(Path(self.userdata.get()), Path(self.loader.get()) if self.loader.get().strip() else None,
                                self.scripts, self.verbose.get(), self.safety_alerts.get(), self.full_rewrite.get())
         options.allow_unlocked_updates = self.allow_unlocked_updates.get()
-        options.custom_cube_tar = overlay
+        options.custom_cube_tars = tuple(path for _, path in overlays)
         options.custom_portable = self.custom_portable.get()
         options.custom_portable_sha256 = self.custom_portable_sha256.get().strip()
         options.custom_executable_name = self.custom_executable_name.get()

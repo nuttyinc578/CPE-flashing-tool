@@ -259,8 +259,7 @@ class CustomPortableGuiTests(unittest.TestCase):
             return SimpleNamespace(get=lambda: value)
         app = SimpleNamespace(trust=variable(True), archive=variable('custom.zip'), target=variable('installed'),
             python=variable('python.exe'), userdata=variable('userdata'), custom_portable=variable(True),
-            custom_portable_sha256=variable('a'*64), active_cube_slot=variable(0),
-            cube_slot_paths=lambda: ('',) * 6, ortain_tar=Path('bundled-ortain.tar'), start=Mock())
+            custom_portable_sha256=variable('a'*64), selected_cube_overlays=lambda: (), start=Mock())
         with patch('cpe_flasher.gui.messagebox.askyesno', return_value=False) as confirm:
             FlasherApp.prepare(app)
         app.start.assert_not_called()

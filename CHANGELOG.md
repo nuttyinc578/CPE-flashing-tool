@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.8
+
+- Select multiple **05 Custom Cube** TAR packages with checkboxes. Apply packages and startup hooks in slot order; stop before compiling if selected packages target the same file.
+- **Uncheck all** keeps remembered paths. All checkboxes start unchecked on each launch.
+
 ## 1.2.7
 
 - Add matching rebuild profiles for free 6.4.2-nightly, 6.4.3-nightly and 6.4.3-nightly.3 alongside stable 6.4.1 and 6.4.2 and nightly.2.

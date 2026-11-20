@@ -3,6 +3,7 @@ import io
 import json
 import tarfile
 import unittest
+from zipfile import ZipFile
 import test_cpe_flasher as fixtures
 from cpeloader import CPELoader
 from cpe_flasher.core import FlasherError, install_flash, restore_backup
@@ -16,14 +17,15 @@ class CustomCubeTests(unittest.TestCase):
 
     def tearDown(self): self.fixture.tearDown()
 
-    def package(self, bad_hash=False):
+    def package(self, bad_hash=False, *, archive=None, module='custom_cube.py', label='Test Custom Cube'):
         code = b'def on_load(app, userdata):\n    app.custom_cube_enabled = True\n'
-        manifest = {'schema':1, 'api':'CubeBeta/1', 'name':'Test Custom Cube', 'version':'1',
-                    'startup':'python/custom_cube.py', 'files':{'python/custom_cube.py': '0'*64 if bad_hash else hashlib.sha256(code).hexdigest()}}
-        with tarfile.open(self.fixture.options.custom_cube_tar, 'w') as archive:
-            for name, data in [('custom-cube.json', json.dumps(manifest).encode()), ('python/custom_cube.py', code)]:
+        source = f'python/{module}'
+        manifest = {'schema':1, 'api':'CubeBeta/1', 'name':label, 'version':'1',
+                    'startup':source, 'files':{source: '0'*64 if bad_hash else hashlib.sha256(code).hexdigest()}}
+        with tarfile.open(archive or self.fixture.options.custom_cube_tar, 'w') as package:
+            for name, data in [('custom-cube.json', json.dumps(manifest).encode()), (source, code)]:
                 info = tarfile.TarInfo(name); info.size = len(data)
-                archive.addfile(info, io.BytesIO(data))
+                package.addfile(info, io.BytesIO(data))
 
     def test_custom_overlay_profile_source_zip_install_and_restore(self):
         self.package()
@@ -39,6 +41,46 @@ class CustomCubeTests(unittest.TestCase):
         restore_backup(self.fixture.target, backup, lambda _:None)
         self.assertFalse((self.fixture.target/'custom_cube.py').exists())
         self.assertEqual((self.fixture.target/fixtures.EXE).read_bytes(), b'original game')
+
+    def test_multiple_overlays_keep_all_files_and_startup_hooks_in_order(self):
+        fx = self.fixture
+        first, second = fx.root/'z-first.tar', fx.root/'a-second.tar'
+        self.package(archive=first, module='first_cube.py', label='First cube')
+        self.package(archive=second, module='second_cube.py', label='Second cube')
+        fx.options.custom_cube_tar = None
+        fx.options.custom_cube_tars = (first, second)
+        CPELoader(fx.target).unlock()
+        plan = fx.prepare()
+        profile = json.loads((plan.portable/'cpe-flash-profile.json').read_text())
+        self.assertEqual([item['name'] for item in profile['custom_cubes']], ['First cube', 'Second cube'])
+        self.assertTrue(plan.label.endswith('First cube + Second cube'))
+        self.assertEqual(profile['scripts'], ['flash_scripts/custom-cube-startup-1.py', 'flash_scripts/custom-cube-startup-2.py'])
+        for name, script in zip(('first_cube.py', 'second_cube.py'), profile['scripts']):
+            self.assertEqual((plan.portable/name).read_bytes(), (plan.portable/script).read_bytes())
+        with ZipFile(plan.portable/'game-source.zip') as source:
+            self.assertTrue({'first_cube.py', 'second_cube.py'}.issubset(source.namelist()))
+
+    def test_conflicting_targets_stop_before_copy_or_compile(self):
+        fx = self.fixture
+        first, second = fx.root/'first.tar', fx.root/'second.tar'
+        self.package(archive=first, module='shared.py')
+        self.package(archive=second, module='SHARED.py')
+        fx.options.custom_cube_tar = None
+        fx.options.custom_cube_tars = (first, second)
+        CPELoader(fx.target).unlock()
+        with self.assertRaisesRegex(FlasherError, r'first\.tar and second\.tar both target .*\.py'):
+            fx.prepare(lambda *_: self.fail('Compiler must not run'))
+        self.assertFalse((fx.root/'stage'/'game-build'/'shared.py').exists())
+        self.assertEqual((fx.target/fixtures.EXE).read_bytes(), b'original game')
+
+    def test_duplicate_package_is_rejected_before_staging(self):
+        fx = self.fixture
+        self.package()
+        fx.options.custom_cube_tars = (fx.options.custom_cube_tar,)
+        CPELoader(fx.target).unlock()
+        with self.assertRaisesRegex(FlasherError, 'selected more than once'):
+            fx.prepare(lambda *_: self.fail('Compiler must not run'))
+        self.assertFalse((fx.root/'stage').exists())
 
     def test_checksum_mismatch_stops_before_compiler(self):
         self.package(bad_hash=True)

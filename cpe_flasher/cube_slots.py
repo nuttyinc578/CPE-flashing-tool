@@ -41,14 +41,17 @@ def save_slots(file: Path, paths: tuple[str, ...]) -> None:
             temporary.unlink()
 
 
-def selected_tar(paths: tuple[str, ...], slot: int, ortain: Path) -> Path | None:
-    if slot == 0:
-        return None
-    if not 1 <= slot <= SLOT_COUNT or len(paths) != SLOT_COUNT:
-        raise ValueError('Select No overlay or a Custom Cube slot from 1 to 6.')
-    value = paths[slot-1].strip()
-    if not value:
-        raise ValueError(f'Slot {slot} is empty. Browse for a TAR or choose No overlay.')
-    if len(value) > MAX_PATH or '\x00' in value:
-        raise ValueError(f'Slot {slot} contains an invalid path.')
-    return ortain if value == BUNDLED_ORTAIN else Path(value)
+def selected_tars(paths: tuple[str, ...], checked: tuple[bool, ...], ortain: Path) -> tuple[tuple[int, Path], ...]:
+    if len(paths) != SLOT_COUNT or len(checked) != SLOT_COUNT:
+        raise ValueError(f'Expected {SLOT_COUNT} Custom Cube slots.')
+    selected = []
+    for slot, (path, enabled) in enumerate(zip(paths, checked), 1):
+        if not enabled:
+            continue
+        value = path.strip()
+        if not value:
+            raise ValueError(f'Slot {slot} is empty. Browse for a TAR or uncheck it.')
+        if len(value) > MAX_PATH or '\x00' in value:
+            raise ValueError(f'Slot {slot} contains an invalid path.')
+        selected.append((slot, ortain if value == BUNDLED_ORTAIN else Path(value)))
+    return tuple(selected)

@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from typing import Callable
 
 from cpeloader import CPELoader, COMPONENTS, MUTABLE, EXCLUDED_DIRS, write_json
+from .cube_slots import SLOT_COUNT
 from .nuttyroot import NuttyRootInputs, stage_nuttyroot
 from .python_discovery import check_python
 from .releases import HALLOWEEN, NIGHTLY, OFFICIAL_NAMES, MODERN_PROFILES, SUPPORTED, exe_version, source_version
@@ -44,6 +45,11 @@ class FlashOptions:
     target_executable_name: str = ''
     allow_custom_files: bool = False
     remove_old_portable_restrictions: bool = False
+    custom_cube_tars: tuple[Path, ...] = ()
+
+    @property
+    def cube_archives(self) -> tuple[Path, ...]:
+        return ((self.custom_cube_tar,) if self.custom_cube_tar else ()) + self.custom_cube_tars
 
 
 CUSTOM_PORTABLE_WARNING = (
@@ -133,10 +139,16 @@ def validate_options(options: FlashOptions | None) -> FlashOptions:
     for path in (*options.scripts, *((options.loader,) if options.loader else ())):
         if not path.is_file() or path.is_symlink() or path.suffix.lower() != '.py':
             raise FlasherError('Optional loaders and startup scripts must be trusted .py files.')
-    if options.custom_cube_tar:
+    if options.cube_archives:
         if not options.full_rewrite: raise FlasherError('Custom Cube Beta requires Full rewrite.')
-        if not options.custom_cube_tar.is_file() or options.custom_cube_tar.suffix.lower() != '.tar':
-            raise FlasherError('Choose a Custom Cube Beta .tar package.')
+        if len(options.cube_archives) > SLOT_COUNT: raise FlasherError(f'Choose up to {SLOT_COUNT} Custom Cube Beta packages.')
+        seen = set()
+        for path in options.cube_archives:
+            if not path.is_file() or path.suffix.lower() != '.tar':
+                raise FlasherError(f'Choose an existing Custom Cube Beta .tar package: {path}')
+            key = str(path.resolve()).casefold()
+            if key in seen: raise FlasherError(f'Custom Cube package selected more than once: {path.name}')
+            seen.add(key)
     return options
 
 
@@ -518,9 +530,9 @@ def prepare_flash(archive: Path, target: Path, workspace: Path, source: Path | N
                 shutil.copy2(runtime_root/'game_overrides'/name, build/name)
     label = apply_project(project, build, portable)
     apply_options(options, build, portable)
-    if options.custom_cube_tar:
-        from .custom_cube import stage_custom_cube
-        label += ' + ' + stage_custom_cube(options.custom_cube_tar, build, portable, workspace)
+    if options.cube_archives:
+        from .custom_cube import stage_custom_cubes
+        label += ' + ' + ' + '.join(stage_custom_cubes(options.cube_archives, build, portable, workspace))
     if options.nuttymod_root:
         label += ' + ' + stage_nuttyroot(options.nuttymod_root, options.loader, archive, build, portable, workspace,
             custom_portable_sha256=options.custom_portable_sha256 if options.custom_portable else None)

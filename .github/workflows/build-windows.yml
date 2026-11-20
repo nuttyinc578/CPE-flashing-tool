@@ -54,9 +54,9 @@ jobs:
           if ('custom_files_default' -notin $result.PSObject.Properties.Name -or 'old_portable_restrictions_removed_default' -notin $result.PSObject.Properties.Name) { throw 'Missing experimental settings in packaged app' }
           $profiles = python -c "from cpe_flasher.releases import PROFILE_REVISIONS; print(','.join(sorted(PROFILE_REVISIONS)))"
           if ($LASTEXITCODE -ne 0 -or ($result.game_profiles -join ',') -ne $profiles -or -not $result.christmas_countdown) { throw 'Missing game profiles or countdown' }
-          if ($result.custom_cube_slots -ne 6 -or $result.custom_cube_active_default -ne 0 -or -not $result.custom_cube_switch_invalidates_plan) { throw 'Invalid Custom Cube slots' }
-          if ($result.version -ne '1.2.7' -or -not $result.gui_initialized -or -not $result.rebuild_source_present -or $result.controls -lt 45 -or $result.tabs -ne 6 -or $result.update_override_default -or $result.custom_portable_default -or $result.custom_files_default -or $result.old_portable_restrictions_removed_default -or -not $result.custom_sha_empty -or -not $result.custom_exe_names_empty -or -not $result.python_discovery_patch -or -not $result.custom_cube_bundle) { throw 'Incomplete flasher GUI/source' }
-      - name: Package v1.2.7 downloads and checksums
+          if ($result.custom_cube_slots -ne 6 -or $result.custom_cube_active_default -ne 0 -or ($result.custom_cube_multiple -join ',') -ne '1,6' -or -not $result.custom_cube_uncheck_all -or -not $result.custom_cube_switch_invalidates_plan) { throw 'Invalid Custom Cube checkboxes' }
+          if ($result.version -ne '1.2.8' -or -not $result.gui_initialized -or -not $result.rebuild_source_present -or $result.controls -lt 45 -or $result.tabs -ne 6 -or $result.update_override_default -or $result.custom_portable_default -or $result.custom_files_default -or $result.old_portable_restrictions_removed_default -or -not $result.custom_sha_empty -or -not $result.custom_exe_names_empty -or -not $result.python_discovery_patch -or -not $result.custom_cube_bundle) { throw 'Incomplete flasher GUI/source' }
+      - name: Package v1.2.8 downloads and checksums
         shell: pwsh
         run: |
           Copy-Item -LiteralPath 'game-source.zip' -Destination 'release-download/Cube-Beta-Rebuild-Source-1.0.0.zip'
@@ -78,8 +78,8 @@ jobs:
             CUSTOM_CUBE.md
             LICENSE
             THIRD_PARTY_NOTICES.txt
-            RELEASE_NOTES_1.2.7.md
+            RELEASE_NOTES_1.2.8.md
             build/gui-self-test.json
-            release-download/CPE-Flasher-Tool-1.2.7-Windows.exe
+            release-download/CPE-Flasher-Tool-1.2.8-Windows.exe
             release-download/Cube-Beta-Rebuild-Source-1.0.0.zip
             release-download/SHA256SUMS.txt

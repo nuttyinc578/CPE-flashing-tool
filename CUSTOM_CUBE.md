@@ -1,8 +1,10 @@
 # Custom Cube Beta / CPE Series 2 — Ortain
 
-In flasher 1.2.6, open **05 Custom Cube**. Use **Browse** to fill any of the six slots with a trusted TAR. Select one slot to use for **Flash ZIP + Recompile**, or select **No overlay**. **Clear** removes the path from that slot; it doesn't delete the TAR. Paths are saved locally when you close the tool, and the next launch starts with **No overlay**.
+In flasher 1.2.8, open **05 Custom Cube**. Use **Browse** to fill any of the six slots with a trusted TAR. Check as many slots as you want to include in **Flash ZIP + Recompile**. Packages and their startup hooks are applied in slot order, 1 through 6. If two packages target the same game file, the build stops and names the conflict. Uncheck one or use packages with different filenames.
 
-**Use bundled Custom Ortain TAR** fills the selected slot or the first empty slot. **Use CPE Series 2 — Ortain project** separately selects the bundled engine project. Configure the original portable ZIP, installed folder, game Python and userdata as before. Unlock first, enable Full rewrite, and close the game before installing the staged build.
+**Uncheck all** keeps all saved paths but selects no overlays. **Clear** unchecks one slot and removes its path; it doesn't delete the TAR. Paths are saved locally when you close the tool, but all boxes start unchecked on the next launch.
+
+**Use bundled Custom Ortain TAR** checks its existing slot or puts it in the first empty slot without replacing another package. **Use CPE Series 2 — Ortain project** separately selects the bundled engine project. Configure the original portable ZIP, installed folder, game Python and userdata as before. Unlock first, enable Full rewrite, and close the game before installing the staged build.
 
 The TAR contains Python **code**, not a Python installation. A working compiler with game dependencies is still required. It is not a standalone game or installer. The supplied TAR changes the window caption, gives spawned shapes a neon palette and adds a gentle pulse on spawning when Ortain is active. You can add rewritten game modules to make deeper changes.
 
