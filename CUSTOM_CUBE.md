@@ -6,6 +6,12 @@ In flasher 1.2.8, open **05 Custom Cube**. Use **Browse** to fill any of the six
 
 **Use bundled Custom Ortain TAR** checks its existing slot or puts it in the first empty slot without replacing another package. **Use CPE Series 2 — Ortain project** separately selects the bundled engine project. Configure the original portable ZIP, installed folder, game Python and userdata as before. Unlock first, enable Full rewrite, and close the game before installing the staged build.
 
+## Build Mode
+
+In flasher 1.2.9, click **Use bundled Build Mode TAR** on **05 Custom Cube**. It checks the Build Mode slot without changing other selections. Use **Flash ZIP + Recompile**, then install the staged build. You can also browse to `Custom-Cube-Beta-Build-Mode.tar` manually.
+
+In solo play, click **Build Mode** or press **B**. Left-click to place a piece on the grid. Use **1** for blocks, **2** for balls and **3** for fixed beams. **R** rotates the beam, **Z** undoes the last placed piece, and **B** or **Esc** leaves the mode. **Clear** removes the pieces and beams with the rest of the sandbox. Pieces last for the current solo session; online and LAN play are unchanged.
+
 The TAR contains Python **code**, not a Python installation. A working compiler with game dependencies is still required. It is not a standalone game or installer. The supplied TAR changes the window caption, gives spawned shapes a neon palette and adds a gentle pulse on spawning when Ortain is active. You can add rewritten game modules to make deeper changes.
 
 ## Package layout

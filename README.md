@@ -9,7 +9,7 @@ before replacing the installation, creates backups, and then creates a shortcut.
 
 [Visit the website](https://nuttyinc578.github.io/CPE-flashing-tool/)
 
-v1.2.8 adds checkboxes to the six saved TAR slots in **05 Custom Cube** so you can apply multiple packages per flash. See the [slot guide](CUSTOM_CUBE.md).
+v1.2.9 adds a bundled **Build Mode** TAR to **05 Custom Cube**. You can still check multiple packages per flash. See the [slot and Build Mode guide](CUSTOM_CUBE.md).
 
 v1.2.7 supports free stable **6.4.1** and **6.4.2**, plus **6.4.2-nightly**, **6.4.3-nightly**, **6.4.3-nightly.2**, and **6.4.3-nightly.3**. See [compatibility and build requirements](RELEASE_NOTES_1.2.7.md).
 

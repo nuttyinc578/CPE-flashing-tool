@@ -24,6 +24,9 @@ if __name__ == '__main__':
         multiple_cube_slots = [slot for slot, _ in app.selected_cube_overlays()]
         app.uncheck_cube_slots()
         uncheck_cleared_selection = not app.selected_cube_overlays()
+        app.use_build_mode_slot()
+        build_mode_selection = app.selected_cube_overlays() == ((2, app.build_mode_tar),) and app.build_mode_tar.is_file()
+        app.uncheck_cube_slots()
         Path(sys.argv[2]).write_text(json.dumps({'version': __version__, 'gui_initialized': True, 'rebuild_source_present': True, 'controls': len(app.controls),
                                                'christmas_countdown':app.christmas_clock.get(),
                                                'game_profiles':sorted(p.stem for p in (Path(getattr(sys,'_MEIPASS','.'))/'game-versions').glob('*.zip')),
@@ -31,6 +34,7 @@ if __name__ == '__main__':
                                                'custom_cube_active_default': initial_cube_slots,
                                                'custom_cube_multiple': multiple_cube_slots,
                                                'custom_cube_uncheck_all': uncheck_cleared_selection,
+                                               'custom_cube_build_mode': build_mode_selection,
                                                'custom_cube_switch_invalidates_plan': switching_cleared_plan,
                                                'tabs': len(app.notebook.tabs()), 'update_override_default': app.allow_unlocked_updates.get(),
                                                'custom_portable_default': app.custom_portable.get(),

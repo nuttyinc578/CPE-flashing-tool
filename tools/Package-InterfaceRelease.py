@@ -21,7 +21,8 @@ output=args.output_dir.resolve(); output.mkdir(parents=True,exist_ok=True)
 app=output/f'CPE-Flasher-Tool-{args.version}-Windows.exe'
 shutil.copy2(args.app, app)
 files=[app]
-for name in ('NuttyMod-Root-1.0.0-Packages.zip','Cube-Beta-Rebuild-Source-1.0.0.zip','Custom-Cube-Beta-Ortain.tar','CPE-Series-2-Ortain.zip'):
+for name in ('NuttyMod-Root-1.0.0-Packages.zip','Cube-Beta-Rebuild-Source-1.0.0.zip','Custom-Cube-Beta-Ortain.tar',
+             'Custom-Cube-Beta-Build-Mode.tar','CPE-Series-2-Ortain.zip'):
     if output!=base:shutil.copy2(base/name,output/name)
     files.append(output/name)
 lines=[]

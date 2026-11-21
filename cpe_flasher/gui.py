@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from . import __version__
 from .releases import PROFILE_REVISIONS, countdown
-from .cube_slots import BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tars
+from .cube_slots import BUNDLED_BUILD_MODE, BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tars
 
 from .core import prepare_flash, install_flash, restore_backup, locate_games, FlashOptions, bundled_source_path, CUSTOM_PORTABLE_WARNING, CUSTOM_FILES_WARNING, OLD_PORTABLE_WARNING
 from cpeloader import write_json
@@ -78,6 +78,11 @@ class FlasherApp(tk.Tk):
         self.cube_slot_checks = [tk.BooleanVar(value=False) for _ in self.cube_slots]
         self.cube_slot_buttons = []
         self.ortain_tar = root/'Custom-Cube-Beta-Ortain.tar'
+        self.build_mode_tar = root/'Custom-Cube-Beta-Build-Mode.tar'
+        for attr in ('ortain_tar', 'build_mode_tar'):
+            package = getattr(self, attr)
+            if not package.is_file():
+                setattr(self, attr, root/'release-download'/package.name)
         self.custom_portable = tk.BooleanVar(value=False)
         self.allow_custom_files = tk.BooleanVar(value=False)
         self.remove_old_portable_restrictions = tk.BooleanVar(value=False)
@@ -173,10 +178,13 @@ class FlasherApp(tk.Tk):
         uncheck = ttk.Button(custom, text='Uncheck all', command=self.uncheck_cube_slots)
         uncheck.pack(anchor='w', pady=(4, 0)); self.controls.append(uncheck)
         ttk.Label(custom, text='Only compile trusted packages: TAR files can contain executable Python. Userdata, Full rewrite, loader unlock, and backup checks still apply.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
-        for title, callback in (('Use bundled Custom Ortain TAR', self.use_ortain_slot),
+        for title, callback in (('Use bundled Build Mode TAR', self.use_build_mode_slot),
+                                ('Use bundled Custom Ortain TAR', self.use_ortain_slot),
                                 ('Use CPE Series 2 — Ortain project', lambda: self.project.set(str(root/'projects'/'cpe-series-2-ortain')))):
             button = ttk.Button(custom, text=title, command=callback)
             button.pack(anchor='w', pady=6); self.controls.append(button)
+        ttk.Label(custom, text='Build Mode adds a solo toolbar for placing blocks, balls and fixed beams on a grid. After flashing, press B or click Build Mode in solo play.',
+                  wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(custom, text='Ortain includes bounded neon motion trails, the pulse(x, y) engine API, and a custom cyan/purple loading scene after mandatory loader warnings. It extends CPE Rephysics rather than replacing its solver.', wraplength=540, style='Muted.TLabel').pack(anchor='w', pady=8)
         ttk.Label(bypass, text='CPELoader unlock updates disabled bypass mod', style='Section.TLabel', wraplength=540).pack(anchor='w', pady=8)
         override = ttk.Checkbutton(bypass, text='Flash mod: allow in-game updates with CPELoader unlocked', variable=self.allow_unlocked_updates)
@@ -420,7 +428,8 @@ class FlasherApp(tk.Tk):
         return tuple(variable.get() for variable in self.cube_slots)
 
     def selected_cube_overlays(self):
-        return selected_tars(self.cube_slot_paths(), tuple(check.get() for check in self.cube_slot_checks), self.ortain_tar)
+        return selected_tars(self.cube_slot_paths(), tuple(check.get() for check in self.cube_slot_checks),
+                             self.ortain_tar, self.build_mode_tar)
 
     def uncheck_cube_slots(self):
         for check in self.cube_slot_checks:
@@ -438,14 +447,20 @@ class FlasherApp(tk.Tk):
         self.cube_slot_checks[slot-1].set(False)
 
     def use_ortain_slot(self):
+        self.use_bundled_cube(BUNDLED_ORTAIN)
+
+    def use_build_mode_slot(self):
+        self.use_bundled_cube(BUNDLED_BUILD_MODE)
+
+    def use_bundled_cube(self, package):
         paths = self.cube_slot_paths()
-        slot = next((i for i, path in enumerate(paths, 1) if path.strip() == BUNDLED_ORTAIN), 0)
+        slot = next((i for i, path in enumerate(paths, 1) if path.strip() == package), 0)
         if not slot:
             slot = next((i for i, path in enumerate(paths, 1) if not path.strip()), 0)
         if not slot:
-            messagebox.showinfo('All six slots are in use', 'Clear a slot before adding the bundled Ortain TAR.')
+            messagebox.showinfo('All six slots are in use', 'Clear a slot before adding this bundled TAR.')
             return
-        self.cube_slots[slot-1].set(BUNDLED_ORTAIN)
+        self.cube_slots[slot-1].set(package)
         self.cube_slot_checks[slot-1].set(True)
 
     def locate(self, silent=False):

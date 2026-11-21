@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from cpe_flasher.cube_slots import BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tars
+from cpe_flasher.cube_slots import BUNDLED_BUILD_MODE, BUNDLED_ORTAIN, SLOT_COUNT, load_slots, save_slots, selected_tars
 from cpe_flasher.gui import FlasherApp
 
 
@@ -67,6 +67,7 @@ class CubeSlotTests(unittest.TestCase):
         flags = [Variable(i == 0) for i in range(6)]
         app = SimpleNamespace(cube_slots=values, cube_slot_checks=flags)
         app.cube_slot_paths = lambda: FlasherApp.cube_slot_paths(app)
+        app.use_bundled_cube = lambda package: FlasherApp.use_bundled_cube(app, package)
         FlasherApp.use_ortain_slot(app)
         FlasherApp.use_ortain_slot(app)
         self.assertEqual(app.cube_slot_paths(), ('my-game.tar', BUNDLED_ORTAIN, '', '', '', ''))
@@ -74,6 +75,18 @@ class CubeSlotTests(unittest.TestCase):
         FlasherApp.uncheck_cube_slots(app)
         self.assertFalse(any(flag.get() for flag in flags))
         self.assertEqual(values[1].get(), BUNDLED_ORTAIN)
+
+    def test_build_mode_button_checks_one_new_slot_without_disturbing_other_packages(self):
+        values = [Variable(BUNDLED_ORTAIN), *[Variable('') for _ in range(5)]]
+        app = SimpleNamespace(cube_slots=values, cube_slot_checks=[Variable(i == 0) for i in range(6)],
+                              ortain_tar=Path('current/ortain.tar'), build_mode_tar=Path('current/build-mode.tar'))
+        app.cube_slot_paths = lambda: FlasherApp.cube_slot_paths(app)
+        app.use_bundled_cube = lambda package: FlasherApp.use_bundled_cube(app, package)
+        FlasherApp.use_build_mode_slot(app)
+        FlasherApp.use_build_mode_slot(app)
+        self.assertEqual(app.cube_slot_paths(), (BUNDLED_ORTAIN, BUNDLED_BUILD_MODE, '', '', '', ''))
+        self.assertEqual(FlasherApp.selected_cube_overlays(app),
+                         ((1, app.ortain_tar), (2, app.build_mode_tar)))
 
     def test_prepare_passes_checked_tars_in_slot_order_and_names_them(self):
         names = ('archive','target','python','userdata','source','project','loader','custom_portable_sha256',
@@ -90,6 +103,7 @@ class CubeSlotTests(unittest.TestCase):
         app.start=lambda work: work()
         app.cube_slot_checks=[Variable(i in {2,6}) for i in range(1,7)]
         app.ortain_tar=Path('bundled.tar')
+        app.build_mode_tar=Path('build-mode.tar')
         app.cube_slot_paths=lambda: ('one.tar','two.tar','three.tar','four.tar','five.tar','six.tar')
         app.selected_cube_overlays=lambda: FlasherApp.selected_cube_overlays(app)
         with patch('cpe_flasher.gui.prepare_flash') as prepare, patch('cpe_flasher.gui.messagebox.askyesno',return_value=True) as confirm:

@@ -6,6 +6,7 @@ import tempfile
 
 SLOT_COUNT = 6
 BUNDLED_ORTAIN = 'Bundled: Custom Ortain.tar'
+BUNDLED_BUILD_MODE = 'Bundled: Build Mode.tar'
 MAX_PATH = 4096
 MAX_CONFIG = 256 * 1024
 
@@ -41,7 +42,8 @@ def save_slots(file: Path, paths: tuple[str, ...]) -> None:
             temporary.unlink()
 
 
-def selected_tars(paths: tuple[str, ...], checked: tuple[bool, ...], ortain: Path) -> tuple[tuple[int, Path], ...]:
+def selected_tars(paths: tuple[str, ...], checked: tuple[bool, ...], ortain: Path,
+                  build_mode: Path | None = None) -> tuple[tuple[int, Path], ...]:
     if len(paths) != SLOT_COUNT or len(checked) != SLOT_COUNT:
         raise ValueError(f'Expected {SLOT_COUNT} Custom Cube slots.')
     selected = []
@@ -53,5 +55,7 @@ def selected_tars(paths: tuple[str, ...], checked: tuple[bool, ...], ortain: Pat
             raise ValueError(f'Slot {slot} is empty. Browse for a TAR or uncheck it.')
         if len(value) > MAX_PATH or '\x00' in value:
             raise ValueError(f'Slot {slot} contains an invalid path.')
-        selected.append((slot, ortain if value == BUNDLED_ORTAIN else Path(value)))
+        if value == BUNDLED_BUILD_MODE and build_mode is None:
+            raise ValueError('The bundled Build Mode TAR is unavailable. Browse for the package or uncheck the slot.')
+        selected.append((slot, ortain if value == BUNDLED_ORTAIN else build_mode if value == BUNDLED_BUILD_MODE else Path(value)))
     return tuple(selected)

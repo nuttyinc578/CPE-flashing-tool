@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.9
+
+- Bundle a **Build Mode** Custom Cube TAR, with a tab button to select it alongside other packages.
+- Add a grid, CPE blocks and balls, fixed beams, beam rotation, and undo to flashed solo play.
+
 ## 1.2.8
 
 - Select multiple **05 Custom Cube** TAR packages with checkboxes. Apply packages and startup hooks in slot order; stop before compiling if selected packages target the same file.
